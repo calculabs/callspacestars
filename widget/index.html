@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://js.jotform.com/JotFormCustomWidget.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 10px;
+        }
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            color: #333;
+            appearance: auto;
+        }
+        select:focus {
+            outline: none;
+            border-color: #4a90d9;
+            box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+        }
+        .loading {
+            color: #999;
+            font-size: 13px;
+            padding: 8px 0;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 12px;
+            padding: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <div class="loading" id="loading">Loading options…</div>
+        <select id="dropdown" style="display:none">
+            <option value="">— Select —</option>
+        </select>
+        <div class="error" id="errorMsg"></div>
+    </div>
+
+    <script>
+        // Parse a single widget setting from data.settings with getWidgetSetting fallback.
+        // Settings in data.settings are URL-encoded JSON (see do_not_do.md #3, #7).
+        // getWidgetSetting is singular, not plural (see do_not_do.md #2).
+        function getSetting(name, data) {
+            try {
+                var settingsStr = data.settings;
+                if (settingsStr) {
+                    var settings = JSON.parse(decodeURIComponent(settingsStr));
+                    if (Array.isArray(settings)) {
+                        var found = null;
+                        for (var i = 0; i < settings.length; i++) {
+                            if (settings[i].name === name) {
+                                found = settings[i].value;
+                                break;
+                            }
+                        }
+                        if (found) return found;
+                    }
+                }
+            } catch (e) { /* fall through */ }
+            return JFCustomWidget.getWidgetSetting(name);
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dropdown').style.display = 'none';
+            document.getElementById('errorMsg').textContent = msg;
+        }
+
+        JFCustomWidget.subscribe("ready", function(data) {
+            var workerUrl = getSetting('workerUrl', data);
+            var fieldId = getSetting('fieldId', data);
+            var placeholder = getSetting('placeholder', data) || '— Select —';
+
+            if (!workerUrl || !fieldId) {
+                showError('Missing required settings: workerUrl and fieldId must be configured.');
+                return;
+            }
+
+            var dropdown = document.getElementById('dropdown');
+            dropdown.options[0].textContent = placeholder;
+
+            var url = workerUrl.replace(/\/+$/, '') + '/deal-fields/' + encodeURIComponent(fieldId);
+
+            fetch(url)
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error('API returned ' + resp.status);
+                    return resp.json();
+                })
+                .then(function(json) {
+                    var options = json.options;
+                    if (!options || options.length === 0) {
+                        showError('No options found for this field.');
+                        return;
+                    }
+
+                    for (var i = 0; i < options.length; i++) {
+                        var opt = document.createElement('option');
+                        opt.value = options[i].label;
+                        opt.textContent = options[i].label;
+                        dropdown.appendChild(opt);
+                    }
+
+                    document.getElementById('loading').style.display = 'none';
+                    dropdown.style.display = '';
+
+                    JFCustomWidget.requestFrameResize({ height: dropdown.offsetHeight + 30 });
+                })
+                .catch(function(err) {
+                    showError('Failed to load options: ' + err.message);
+                });
+
+            dropdown.addEventListener('change', function() {
+                var val = dropdown.value;
+                JFCustomWidget.sendData({
+                    valid: val !== '',
+                    value: val
+                });
+            });
+
+            JFCustomWidget.subscribe("submit", function() {
+                var val = dropdown.value;
+                JFCustomWidget.sendSubmit({
+                    valid: val !== '',
+                    value: val
+                });
+            });
+        });
+    </script>
+</body>
+</html>
