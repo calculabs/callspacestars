@@ -1,5 +1,5 @@
 const ALLOWED_ORIGINS = [
-  'https://andyabelow.github.io',
+  'https://calculabs.github.io',
   'https://form.jotform.com',
   'https://www.jotform.com',
   'https://submit.jotform.com',
