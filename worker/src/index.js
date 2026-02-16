@@ -34,29 +34,51 @@ export default {
       });
     }
 
-    const match = url.pathname.match(/^\/deal-fields\/(\d+)$/);
+    const match = url.pathname.match(/^\/deal-fields\/([a-fA-F0-9]+)$/);
     if (!match) {
-      return new Response(JSON.stringify({ error: 'Not found. Use /deal-fields/:id' }), {
+      return new Response(JSON.stringify({ error: 'Not found. Use /deal-fields/:key' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
       });
     }
 
-    const fieldId = match[1];
+    const fieldKey = match[1];
+    const isNumeric = /^\d+$/.test(fieldKey);
 
     try {
-      const apiUrl = `https://api.pipedrive.com/v1/dealFields/${fieldId}?api_token=${env.PIPEDRIVE_API_TOKEN}`;
-      const resp = await fetch(apiUrl);
+      let field;
 
-      if (!resp.ok) {
-        return new Response(JSON.stringify({ error: `Pipedrive API error: ${resp.status}` }), {
-          status: resp.status,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
-        });
+      if (isNumeric) {
+        // Direct lookup by numeric ID
+        const apiUrl = `https://api.pipedrive.com/v1/dealFields/${fieldKey}?api_token=${env.PIPEDRIVE_API_TOKEN}`;
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) {
+          return new Response(JSON.stringify({ error: `Pipedrive API error: ${resp.status}` }), {
+            status: resp.status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
+          });
+        }
+        const json = await resp.json();
+        field = json.data;
+      } else {
+        // Lookup by API key — fetch all deal fields and find by key
+        const apiUrl = `https://api.pipedrive.com/v1/dealFields?api_token=${env.PIPEDRIVE_API_TOKEN}`;
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) {
+          return new Response(JSON.stringify({ error: `Pipedrive API error: ${resp.status}` }), {
+            status: resp.status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
+          });
+        }
+        const json = await resp.json();
+        field = (json.data || []).find(f => f.key === fieldKey);
+        if (!field) {
+          return new Response(JSON.stringify({ error: 'Field not found for key: ' + fieldKey }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
+          });
+        }
       }
-
-      const json = await resp.json();
-      const field = json.data;
 
       const stripped = {
         id: field.id,
