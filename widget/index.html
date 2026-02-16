@@ -3,33 +3,115 @@
 <head>
     <script src="https://js.jotform.com/JotFormCustomWidget.min.js"></script>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 10px;
+            padding: 4px;
         }
-        select {
+
+        .select-wrapper {
+            position: relative;
             width: 100%;
-            padding: 8px 12px;
-            font-size: 14px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        }
+
+        .select-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 13px;
             background: #fff;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            text-align: left;
             color: #333;
-            appearance: auto;
         }
-        select:focus {
+
+        .select-trigger:focus {
             outline: none;
-            border-color: #4a90d9;
-            box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+            border-color: #497197;
+            box-shadow: 0 0 0 3px rgba(73, 113, 151, 0.1);
         }
+
+        .select-trigger .placeholder {
+            color: #9ca3af;
+        }
+
+        .select-trigger .value {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .select-trigger .chevron {
+            color: #64748b;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .select-trigger.open .chevron {
+            transform: rotate(180deg);
+        }
+
+        .select-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            z-index: 50;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            max-height: 240px;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .select-menu.open {
+            display: block;
+        }
+
+        .select-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #333;
+            transition: background-color 0.1s;
+        }
+
+        .select-item:hover {
+            background: #eff6ff;
+        }
+
+        .select-item.selected {
+            font-weight: 500;
+        }
+
+        .select-item .check {
+            color: #497197;
+            font-size: 14px;
+            margin-left: 8px;
+        }
+
         .loading {
             color: #999;
             font-size: 13px;
             padding: 8px 0;
         }
+
         .error {
-            color: #e74c3c;
+            color: #dc2626;
             font-size: 12px;
             padding: 8px 0;
         }
@@ -38,9 +120,15 @@
 <body>
     <div id="wrapper">
         <div class="loading" id="loading">Loading options…</div>
-        <select id="dropdown" style="display:none">
-            <option value="">— Select —</option>
-        </select>
+        <div class="select-wrapper" id="selectWrapper" style="display:none">
+            <button type="button" class="select-trigger" id="trigger">
+                <span class="value placeholder" id="triggerLabel">— Select —</span>
+                <svg class="chevron" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+            <div class="select-menu" id="menu"></div>
+        </div>
         <div class="error" id="errorMsg"></div>
     </div>
 
@@ -70,7 +158,7 @@
 
         function showError(msg) {
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('dropdown').style.display = 'none';
+            document.getElementById('selectWrapper').style.display = 'none';
             document.getElementById('errorMsg').textContent = msg;
         }
 
@@ -84,8 +172,13 @@
                 return;
             }
 
-            var dropdown = document.getElementById('dropdown');
-            dropdown.options[0].textContent = placeholder;
+            var trigger = document.getElementById('trigger');
+            var triggerLabel = document.getElementById('triggerLabel');
+            var menu = document.getElementById('menu');
+            var wrapper = document.getElementById('selectWrapper');
+            var selectedValue = '';
+
+            triggerLabel.textContent = placeholder;
 
             var url = workerUrl.replace(/\/+$/, '') + '/deal-fields/' + encodeURIComponent(fieldId);
 
@@ -102,34 +195,84 @@
                     }
 
                     for (var i = 0; i < options.length; i++) {
-                        var opt = document.createElement('option');
-                        opt.value = options[i].label;
-                        opt.textContent = options[i].label;
-                        dropdown.appendChild(opt);
+                        var item = document.createElement('div');
+                        item.className = 'select-item';
+                        item.setAttribute('data-value', options[i].label);
+                        item.innerHTML = '<span>' + options[i].label + '</span>';
+                        menu.appendChild(item);
                     }
 
                     document.getElementById('loading').style.display = 'none';
-                    dropdown.style.display = '';
+                    wrapper.style.display = '';
 
-                    JFCustomWidget.requestFrameResize({ height: dropdown.offsetHeight + 30 });
+                    JFCustomWidget.requestFrameResize({ height: 50 });
                 })
                 .catch(function(err) {
                     showError('Failed to load options: ' + err.message);
                 });
 
-            dropdown.addEventListener('change', function() {
-                var val = dropdown.value;
+            // Toggle menu
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var isOpen = menu.classList.contains('open');
+                if (isOpen) {
+                    closeMenu();
+                } else {
+                    menu.classList.add('open');
+                    trigger.classList.add('open');
+                    // Resize to fit the menu
+                    var totalH = wrapper.offsetHeight + menu.scrollHeight + 20;
+                    JFCustomWidget.requestFrameResize({ height: totalH });
+                }
+            });
+
+            function closeMenu() {
+                menu.classList.remove('open');
+                trigger.classList.remove('open');
+                JFCustomWidget.requestFrameResize({ height: 50 });
+            }
+
+            // Select an item
+            menu.addEventListener('click', function(e) {
+                var item = e.target.closest('.select-item');
+                if (!item) return;
+
+                selectedValue = item.getAttribute('data-value');
+
+                // Update trigger label
+                triggerLabel.textContent = selectedValue;
+                triggerLabel.classList.remove('placeholder');
+
+                // Update selected state
+                var items = menu.querySelectorAll('.select-item');
+                for (var i = 0; i < items.length; i++) {
+                    items[i].classList.remove('selected');
+                    var check = items[i].querySelector('.check');
+                    if (check) check.remove();
+                }
+                item.classList.add('selected');
+                var checkmark = document.createElement('span');
+                checkmark.className = 'check';
+                checkmark.textContent = '✓';
+                item.appendChild(checkmark);
+
+                closeMenu();
+
                 JFCustomWidget.sendData({
-                    valid: val !== '',
-                    value: val
+                    valid: true,
+                    value: selectedValue
                 });
             });
 
+            // Close on outside click
+            document.addEventListener('click', function() {
+                closeMenu();
+            });
+
             JFCustomWidget.subscribe("submit", function() {
-                var val = dropdown.value;
                 JFCustomWidget.sendSubmit({
-                    valid: val !== '',
-                    value: val
+                    valid: selectedValue !== '',
+                    value: selectedValue
                 });
             });
         });
