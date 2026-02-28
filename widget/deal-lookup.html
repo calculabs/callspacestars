@@ -183,16 +183,44 @@
             }
             workerUrl = workerUrl.replace(/\/+$/, '');
 
-            // Field QID mappings
-            var fieldMap = {
-                projectId:  getSetting('fieldId_projectId', data),
-                clientName: getSetting('fieldId_clientName', data),
-                location:   getSetting('fieldId_location', data),
-                phone:      getSetting('fieldId_phone', data),
-                date:       getSetting('fieldId_date', data),
-                time:       getSetting('fieldId_time', data),
-                salesRep:   getSetting('fieldId_salesRep', data),
+            // Unique name → Pipedrive field mappings (configured via widget settings)
+            var nameMap = {
+                projectId:  getSetting('field_projectId', data),
+                clientName: getSetting('field_clientName', data),
+                location:   getSetting('field_location', data),
+                phone:      getSetting('field_phone', data),
+                date:       getSetting('field_date', data),
+                time:       getSetting('field_time', data),
+                salesRep:   getSetting('field_salesRep', data),
             };
+
+            // Discover QIDs from unique names via formData keys (format: qQID_uniqueName)
+            var qidMap = {};
+
+            function buildQidMap(formData) {
+                if (!formData) return;
+                var keys = Object.keys(formData);
+                // Invert nameMap: uniqueName → our field key
+                var nameToKey = {};
+                for (var k in nameMap) {
+                    if (nameMap[k]) nameToKey[nameMap[k].toLowerCase()] = k;
+                }
+                for (var i = 0; i < keys.length; i++) {
+                    // formData keys look like: q35_uniqueProjectId
+                    var match = keys[i].match(/^q(\d+)_(.+)$/);
+                    if (match) {
+                        var qid = match[1];
+                        var uname = match[2].toLowerCase();
+                        if (nameToKey[uname]) {
+                            qidMap[nameToKey[uname]] = qid;
+                        }
+                    }
+                }
+            }
+
+            JFCustomWidget.subscribe("formData", function(formData) {
+                buildQidMap(formData);
+            });
 
             var allDeals = [];
             var selectedDeal = null;
@@ -268,7 +296,8 @@
                 JFCustomWidget.requestFrameResize({ height: 50 });
             }
 
-            function setField(qid, value) {
+            function setField(fieldKey, value) {
+                var qid = qidMap[fieldKey];
                 if (!qid) return;
                 try {
                     JFCustomWidget.setFieldValueById(qid, value || '');
@@ -281,11 +310,11 @@
                 closeMenu();
 
                 // Populate fields from deal data
-                setField(fieldMap.projectId, String(deal.id));
-                setField(fieldMap.clientName, deal.title);
-                setField(fieldMap.location, deal.address);
-                setField(fieldMap.phone, deal.phone);
-                setField(fieldMap.salesRep, deal.salesRep);
+                setField('projectId', String(deal.id));
+                setField('clientName', deal.title);
+                setField('location', deal.address);
+                setField('phone', deal.phone);
+                setField('salesRep', deal.salesRep);
 
                 // Send widget value
                 JFCustomWidget.sendData({ valid: true, value: String(deal.id) });
@@ -296,8 +325,8 @@
                 fetch(workerUrl + '/deals/' + deal.id + '/activity')
                     .then(function(resp) { return resp.json(); })
                     .then(function(activity) {
-                        setField(fieldMap.date, activity.due_date);
-                        setField(fieldMap.time, activity.due_time);
+                        setField('date', activity.due_date);
+                        setField('time', activity.due_time);
                         popEl.style.display = 'none';
                     })
                     .catch(function() {
