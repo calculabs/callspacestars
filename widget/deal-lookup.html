@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://js.jotform.com/JotFormCustomWidget.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 4px;
+        }
+
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 13px;
+            background: #fff;
+            cursor: text;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            color: #333;
+        }
+
+        .select-trigger:focus-within {
+            border-color: #497197;
+            box-shadow: 0 0 0 3px rgba(73, 113, 151, 0.1);
+        }
+
+        .select-trigger input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 13px;
+            background: transparent;
+            color: #333;
+            min-width: 0;
+        }
+
+        .select-trigger input::placeholder {
+            color: #9ca3af;
+        }
+
+        .select-trigger .chevron {
+            color: #64748b;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .select-trigger.open .chevron {
+            transform: rotate(180deg);
+        }
+
+        .select-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            z-index: 50;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .select-menu.open {
+            display: block;
+        }
+
+        .select-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #333;
+            transition: background-color 0.1s;
+        }
+
+        .select-item:hover,
+        .select-item.highlighted {
+            background: #eff6ff;
+        }
+
+        .select-item.selected {
+            font-weight: 500;
+        }
+
+        .select-item .check {
+            color: #497197;
+            font-size: 14px;
+            margin-left: 8px;
+        }
+
+        .select-item .deal-id {
+            color: #64748b;
+            font-size: 12px;
+            margin-right: 6px;
+            font-weight: 600;
+        }
+
+        .no-results {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .loading {
+            color: #999;
+            font-size: 13px;
+            padding: 8px 0;
+        }
+
+        .error {
+            color: #dc2626;
+            font-size: 12px;
+            padding: 8px 0;
+        }
+
+        .populating {
+            font-size: 12px;
+            color: #497197;
+            padding: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <div class="loading" id="loading">Loading deals…</div>
+        <div class="select-wrapper" id="selectWrapper" style="display:none">
+            <div class="select-trigger" id="trigger">
+                <input type="text" id="searchInput" placeholder="Type deal ID or client name…" autocomplete="off" />
+                <svg class="chevron" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="select-menu" id="menu"></div>
+        </div>
+        <div class="populating" id="populating" style="display:none">Populating fields…</div>
+        <div class="error" id="errorMsg"></div>
+    </div>
+
+    <script>
+        function getSetting(name, data) {
+            try {
+                var settingsStr = data.settings;
+                if (settingsStr) {
+                    var settings = JSON.parse(decodeURIComponent(settingsStr));
+                    if (Array.isArray(settings)) {
+                        for (var i = 0; i < settings.length; i++) {
+                            if (settings[i].name === name) return settings[i].value;
+                        }
+                    }
+                }
+            } catch (e) { /* fall through */ }
+            return JFCustomWidget.getWidgetSetting(name);
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('selectWrapper').style.display = 'none';
+            document.getElementById('errorMsg').textContent = msg;
+        }
+
+        JFCustomWidget.subscribe("ready", function(data) {
+            var workerUrl = getSetting('workerUrl', data);
+            if (!workerUrl) {
+                showError('Missing required setting: workerUrl');
+                return;
+            }
+            workerUrl = workerUrl.replace(/\/+$/, '');
+
+            // Field QID mappings
+            var fieldMap = {
+                projectId:  getSetting('fieldId_projectId', data),
+                clientName: getSetting('fieldId_clientName', data),
+                location:   getSetting('fieldId_location', data),
+                phone:      getSetting('fieldId_phone', data),
+                date:       getSetting('fieldId_date', data),
+                time:       getSetting('fieldId_time', data),
+                salesRep:   getSetting('fieldId_salesRep', data),
+            };
+
+            var allDeals = [];
+            var selectedDeal = null;
+            var highlightIndex = -1;
+
+            var searchInput = document.getElementById('searchInput');
+            var trigger = document.getElementById('trigger');
+            var menu = document.getElementById('menu');
+            var wrapper = document.getElementById('selectWrapper');
+
+            // Fetch all Demo-Sale deals
+            fetch(workerUrl + '/deals')
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error('API returned ' + resp.status);
+                    return resp.json();
+                })
+                .then(function(deals) {
+                    allDeals = deals;
+                    document.getElementById('loading').style.display = 'none';
+                    wrapper.style.display = '';
+                    JFCustomWidget.requestFrameResize({ height: 50 });
+                })
+                .catch(function(err) {
+                    showError('Failed to load deals: ' + err.message);
+                });
+
+            function filterDeals(query) {
+                if (!query) return allDeals.slice(0, 50);
+                var q = query.toLowerCase();
+                return allDeals.filter(function(d) {
+                    return String(d.id).includes(q) || d.title.toLowerCase().includes(q);
+                }).slice(0, 50);
+            }
+
+            function renderMenu(deals) {
+                menu.innerHTML = '';
+                highlightIndex = -1;
+                if (deals.length === 0) {
+                    var noRes = document.createElement('div');
+                    noRes.className = 'no-results';
+                    noRes.textContent = 'No matching deals';
+                    menu.appendChild(noRes);
+                    return;
+                }
+                for (var i = 0; i < deals.length; i++) {
+                    var item = document.createElement('div');
+                    item.className = 'select-item';
+                    if (selectedDeal && deals[i].id === selectedDeal.id) {
+                        item.className += ' selected';
+                    }
+                    item.setAttribute('data-index', i);
+                    item.setAttribute('data-id', deals[i].id);
+                    var idSpan = '<span class="deal-id">' + deals[i].id + '</span>';
+                    var titleSpan = '<span>' + deals[i].title + '</span>';
+                    var checkSpan = (selectedDeal && deals[i].id === selectedDeal.id) ? '<span class="check">✓</span>' : '';
+                    item.innerHTML = '<span>' + idSpan + titleSpan + '</span>' + checkSpan;
+                    menu.appendChild(item);
+                }
+            }
+
+            function openMenu() {
+                var deals = filterDeals(searchInput.value);
+                renderMenu(deals);
+                menu.classList.add('open');
+                trigger.classList.add('open');
+                var totalH = wrapper.offsetHeight + Math.min(menu.scrollHeight, 300) + 20;
+                JFCustomWidget.requestFrameResize({ height: totalH });
+            }
+
+            function closeMenu() {
+                menu.classList.remove('open');
+                trigger.classList.remove('open');
+                JFCustomWidget.requestFrameResize({ height: 50 });
+            }
+
+            function setField(qid, value) {
+                if (!qid) return;
+                try {
+                    JFCustomWidget.setFieldValueById(qid, value || '');
+                } catch (e) { /* field may not exist */ }
+            }
+
+            function selectDeal(deal) {
+                selectedDeal = deal;
+                searchInput.value = deal.id + ' - ' + deal.title;
+                closeMenu();
+
+                // Populate fields from deal data
+                setField(fieldMap.projectId, String(deal.id));
+                setField(fieldMap.clientName, deal.title);
+                setField(fieldMap.location, deal.address);
+                setField(fieldMap.phone, deal.phone);
+                setField(fieldMap.salesRep, deal.salesRep);
+
+                // Send widget value
+                JFCustomWidget.sendData({ valid: true, value: String(deal.id) });
+
+                // Fetch activity for date/time
+                var popEl = document.getElementById('populating');
+                popEl.style.display = '';
+                fetch(workerUrl + '/deals/' + deal.id + '/activity')
+                    .then(function(resp) { return resp.json(); })
+                    .then(function(activity) {
+                        setField(fieldMap.date, activity.due_date);
+                        setField(fieldMap.time, activity.due_time);
+                        popEl.style.display = 'none';
+                    })
+                    .catch(function() {
+                        popEl.style.display = 'none';
+                    });
+            }
+
+            // Input events
+            searchInput.addEventListener('focus', function() {
+                openMenu();
+            });
+
+            searchInput.addEventListener('input', function() {
+                openMenu();
+            });
+
+            searchInput.addEventListener('keydown', function(e) {
+                var items = menu.querySelectorAll('.select-item');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    highlightIndex = Math.min(highlightIndex + 1, items.length - 1);
+                    updateHighlight(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlightIndex = Math.max(highlightIndex - 1, 0);
+                    updateHighlight(items);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlightIndex >= 0 && highlightIndex < items.length) {
+                        var dealId = parseInt(items[highlightIndex].getAttribute('data-id'));
+                        var deal = allDeals.find(function(d) { return d.id === dealId; });
+                        if (deal) selectDeal(deal);
+                    }
+                } else if (e.key === 'Escape') {
+                    closeMenu();
+                    searchInput.blur();
+                }
+            });
+
+            function updateHighlight(items) {
+                for (var i = 0; i < items.length; i++) {
+                    items[i].classList.toggle('highlighted', i === highlightIndex);
+                }
+                if (items[highlightIndex]) {
+                    items[highlightIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            // Click to select
+            menu.addEventListener('click', function(e) {
+                var item = e.target.closest('.select-item');
+                if (!item) return;
+                var dealId = parseInt(item.getAttribute('data-id'));
+                var deal = allDeals.find(function(d) { return d.id === dealId; });
+                if (deal) selectDeal(deal);
+            });
+
+            // Close on outside click
+            document.addEventListener('click', function(e) {
+                if (!wrapper.contains(e.target)) {
+                    closeMenu();
+                }
+            });
+
+            // Submit handler
+            JFCustomWidget.subscribe("submit", function() {
+                JFCustomWidget.sendSubmit({
+                    valid: selectedDeal !== null,
+                    value: selectedDeal ? String(selectedDeal.id) : ''
+                });
+            });
+        });
+    </script>
+</body>
+</html>
