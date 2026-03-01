@@ -187,11 +187,24 @@
                 console.log('[deal-lookup]', msg);
             }
 
-            log('Widget ready. Raw settings: ' + data.settings);
+            // Dump ALL settings using every available method
+            log('data.settings raw: ' + data.settings);
             try {
-                var decoded = JSON.parse(decodeURIComponent(data.settings));
-                log('Decoded settings: ' + JSON.stringify(decoded));
-            } catch(e) { log('Settings decode error: ' + e.message); }
+                log('getWidgetSettings(): ' + JSON.stringify(JFCustomWidget.getWidgetSettings()));
+            } catch(e) { log('getWidgetSettings error: ' + e.message); }
+
+            // Try every possible parameter name format
+            var tryNames = [
+                'field_projectId', 'field_clientName', 'field_location', 'field_phone',
+                'field_date', 'field_time', 'field_salesRep',
+                'projectId', 'clientName', 'location', 'phone', 'date', 'time', 'salesRep',
+                'Project ID (Deal ID)', 'Client Name', 'Location', 'Phone Number',
+                'Date', 'Time', 'Primary Sales Rep'
+            ];
+            for (var t = 0; t < tryNames.length; t++) {
+                var val = JFCustomWidget.getWidgetSetting(tryNames[t]);
+                if (val) log('getWidgetSetting("' + tryNames[t] + '"): ' + val);
+            }
 
             // Field unique names (configured via widget settings)
             var fieldNames = {
