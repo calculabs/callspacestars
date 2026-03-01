@@ -187,50 +187,119 @@
                 console.log('[deal-lookup]', msg);
             }
 
-            // Read field unique names from URL query params (most reliable)
-            // Widget URL format: deal-lookup.html?projectId=UPID&clientName=ClientName&...
-            var urlParams = {};
-            try {
-                var allQS = JFCustomWidget.getAllQueryString();
-                if (allQS && typeof allQS === 'object') urlParams = allQS;
-            } catch(e) {}
-            // Fallback to window.location.search
-            if (!urlParams.projectId) {
-                try {
-                    var sp = new URLSearchParams(window.location.search);
-                    sp.forEach(function(v, k) { urlParams[k] = v; });
-                } catch(e) {}
-            }
+            log('══════════════════════════════════════');
+            log('INIT — raw data.settings: ' + data.settings);
 
-            // Field unique names: try URL params first, then widget settings
-            var fieldNames = {
-                projectId:  urlParams.projectId  || getSetting('field_projectId', data),
-                clientName: urlParams.clientName  || getSetting('field_clientName', data),
-                location:   urlParams.location    || getSetting('field_location', data),
-                phone:      urlParams.phone       || getSetting('field_phone', data),
-                date:       urlParams.date        || getSetting('field_date', data),
-                time:       urlParams.time        || getSetting('field_time', data),
-                salesRep:   urlParams.salesRep    || getSetting('field_salesRep', data),
+            // ── FIELD LABEL MAP (Method 1: setFieldsValueByLabel) ──
+            // Default labels = the question text visible in the form.
+            // Override via labelMap setting: "projectId=Your Label,clientName=Other Label,..."
+            var labels = {
+                projectId:  'Unique Project ID',
+                clientName: 'Client Name',
+                location:   'Location',
+                phone:      'Phone Number',
+                date:       'Date',
+                time:       'Time',
+                salesRep:   'Primary Sales Rep',
             };
-            log('Field names: ' + JSON.stringify(fieldNames));
-
-            // Discover QIDs from unique names
-            var qidMap = {};
-            for (var k in fieldNames) {
-                if (!fieldNames[k]) continue;
-                try {
-                    var result = JFCustomWidget.getFieldsValueByName(fieldNames[k]);
-                    log('getFieldsValueByName(' + fieldNames[k] + '): ' + JSON.stringify(result));
-                    if (result && typeof result === 'object') {
-                        var rkeys = Object.keys(result);
-                        if (rkeys.length > 0) {
-                            qidMap[k] = rkeys[0];
-                            log('Mapped: ' + k + ' → QID ' + rkeys[0]);
-                        }
+            var labelMapStr = getSetting('labelMap', data);
+            if (labelMapStr) {
+                log('labelMap setting found: ' + labelMapStr);
+                var lparts = labelMapStr.split(',');
+                for (var i = 0; i < lparts.length; i++) {
+                    var eq = lparts[i].indexOf('=');
+                    if (eq > 0) {
+                        var lk = lparts[i].substring(0, eq).trim();
+                        var lv = lparts[i].substring(eq + 1).trim();
+                        if (labels.hasOwnProperty(lk)) labels[lk] = lv;
                     }
-                } catch (e) { log('getFieldsValueByName error for ' + k + ': ' + e.message); }
+                }
             }
-            log('QID map: ' + JSON.stringify(qidMap));
+            log('Method 1 labels: ' + JSON.stringify(labels));
+
+            // ── UNIQUE NAMES (Method 2: storeToField / Method 3: setFieldsValueById) ──
+            // Source priority: fieldMap setting > URL params > individual field_* settings
+            var uniqueNames = {};
+            var allFieldKeys = ['projectId', 'clientName', 'location', 'phone', 'date', 'time', 'salesRep'];
+
+            // Try fieldMap setting (single setting: "projectId=UPID,clientName=ClientName,...")
+            var fieldMapStr = getSetting('fieldMap', data);
+            if (fieldMapStr) {
+                log('fieldMap setting found: ' + fieldMapStr);
+                var fparts = fieldMapStr.split(',');
+                for (var i = 0; i < fparts.length; i++) {
+                    var feq = fparts[i].indexOf('=');
+                    if (feq > 0) {
+                        var fk = fparts[i].substring(0, feq).trim();
+                        var fv = fparts[i].substring(feq + 1).trim();
+                        uniqueNames[fk] = fv;
+                    }
+                }
+            } else {
+                log('fieldMap setting: NOT FOUND');
+            }
+
+            // Try URL params as fallback
+            if (!uniqueNames.projectId) {
+                var urlParams = {};
+                try {
+                    var allQS = JFCustomWidget.getAllQueryString();
+                    if (allQS && typeof allQS === 'object') urlParams = allQS;
+                } catch(e) {}
+                if (!urlParams.projectId) {
+                    try {
+                        var sp = new URLSearchParams(window.location.search);
+                        sp.forEach(function(v, k) { urlParams[k] = v; });
+                    } catch(e) {}
+                }
+                for (var i = 0; i < allFieldKeys.length; i++) {
+                    if (urlParams[allFieldKeys[i]]) uniqueNames[allFieldKeys[i]] = urlParams[allFieldKeys[i]];
+                }
+                if (Object.keys(uniqueNames).length > 0) log('Unique names from URL params');
+            }
+
+            // Try individual field_* settings as fallback
+            for (var i = 0; i < allFieldKeys.length; i++) {
+                if (!uniqueNames[allFieldKeys[i]]) {
+                    var sv = getSetting('field_' + allFieldKeys[i], data);
+                    if (sv) uniqueNames[allFieldKeys[i]] = sv;
+                }
+            }
+
+            var hasUniqueNames = Object.keys(uniqueNames).length > 0;
+            log('Method 2+3 unique names: ' + JSON.stringify(uniqueNames));
+            if (!hasUniqueNames) log('No unique names configured — Methods 2 & 3 will be skipped');
+
+            // ── QID DISCOVERY (Method 3: setFieldsValueById) ──
+            // getFieldsValueByName is ASYNC — needs callback + array input
+            var qidMap = {};
+            if (hasUniqueNames) {
+                var namesToResolve = [];
+                var nameKeys = [];
+                for (var i = 0; i < allFieldKeys.length; i++) {
+                    if (uniqueNames[allFieldKeys[i]]) {
+                        namesToResolve.push(uniqueNames[allFieldKeys[i]]);
+                        nameKeys.push(allFieldKeys[i]);
+                    }
+                }
+                log('Resolving QIDs via getFieldsValueByName(' + JSON.stringify(namesToResolve) + ')...');
+                try {
+                    JFCustomWidget.getFieldsValueByName(namesToResolve, function(result) {
+                        log('getFieldsValueByName callback fired!');
+                        log('  result: ' + JSON.stringify(result));
+                        if (result && typeof result === 'object') {
+                            var qids = Object.keys(result);
+                            for (var i = 0; i < qids.length && i < nameKeys.length; i++) {
+                                qidMap[nameKeys[i]] = qids[i];
+                                log('  QID: ' + nameKeys[i] + ' (' + namesToResolve[i] + ') → ' + qids[i]);
+                            }
+                        }
+                        log('Final QID map: ' + JSON.stringify(qidMap));
+                    });
+                } catch(e) {
+                    log('getFieldsValueByName ERROR: ' + e.message);
+                }
+            }
 
             var allDeals = [];
             var selectedDeal = null;
@@ -253,10 +322,76 @@
                     document.getElementById('loading').style.display = 'none';
                     wrapper.style.display = '';
                     JFCustomWidget.requestFrameResize({ height: 50 });
+                    log('Loaded ' + deals.length + ' deals');
                 })
                 .catch(function(err) {
                     showError('Failed to load deals: ' + err.message);
                 });
+
+            // ── POPULATE FIELDS — tries all 3 methods ──
+            function populateFields(fieldData) {
+                log('────────────────────────────────');
+
+                // Method 1: setFieldsValueByLabel
+                log('Method 1: setFieldsValueByLabel');
+                var labelArray = [];
+                for (var k in fieldData) {
+                    if (fieldData[k] && labels[k]) {
+                        labelArray.push({ label: labels[k], value: fieldData[k] });
+                    }
+                }
+                if (labelArray.length > 0) {
+                    log('  Sending: ' + JSON.stringify(labelArray));
+                    try {
+                        JFCustomWidget.setFieldsValueByLabel(labelArray);
+                        log('  setFieldsValueByLabel → OK');
+                    } catch(e) {
+                        log('  setFieldsValueByLabel → ERROR: ' + e.message);
+                    }
+                } else {
+                    log('  SKIP (no field data)');
+                }
+
+                // Method 2: storeToField
+                log('Method 2: storeToField (unique names)');
+                if (!hasUniqueNames) {
+                    log('  SKIP (no unique names configured)');
+                } else {
+                    for (var k in fieldData) {
+                        if (!fieldData[k]) { log('  ' + k + ': SKIP (empty value)'); continue; }
+                        if (!uniqueNames[k]) { log('  ' + k + ': SKIP (no unique name)'); continue; }
+                        try {
+                            JFCustomWidget.storeToField(uniqueNames[k], fieldData[k]);
+                            log('  ' + k + ': storeToField("' + uniqueNames[k] + '", "' + fieldData[k] + '") → OK');
+                        } catch(e) {
+                            log('  ' + k + ': storeToField → ERROR: ' + e.message);
+                        }
+                    }
+                }
+
+                // Method 3: setFieldsValueById
+                log('Method 3: setFieldsValueById (QIDs)');
+                var idArray = [];
+                for (var k in fieldData) {
+                    if (!fieldData[k]) continue;
+                    if (!qidMap[k]) { log('  ' + k + ': SKIP (no QID)'); continue; }
+                    idArray.push({ id: qidMap[k], value: fieldData[k] });
+                    log('  ' + k + ': QID ' + qidMap[k] + ' = "' + fieldData[k] + '"');
+                }
+                if (idArray.length > 0) {
+                    log('  Sending: ' + JSON.stringify(idArray));
+                    try {
+                        JFCustomWidget.setFieldsValueById(idArray);
+                        log('  setFieldsValueById → OK');
+                    } catch(e) {
+                        log('  setFieldsValueById → ERROR: ' + e.message);
+                    }
+                } else {
+                    log('  SKIP (no QIDs resolved)');
+                }
+
+                log('────────────────────────────────');
+            }
 
             function filterDeals(query) {
                 if (!query) return allDeals.slice(0, 50);
@@ -307,28 +442,24 @@
                 JFCustomWidget.requestFrameResize({ height: 50 });
             }
 
-            function setField(fieldKey, value) {
-                var qid = qidMap[fieldKey];
-                if (!qid) { log('setField SKIP: ' + fieldKey + ' (no QID)'); return; }
-                value = value || '';
-                log('setField: ' + fieldKey + ' → QID ' + qid + ' = "' + value + '"');
-                try {
-                    JFCustomWidget.setFieldsValueById(qid, value);
-                    log('  → setFieldsValueById OK');
-                } catch (e) { log('  → setFieldsValueById ERROR: ' + e.message); }
-            }
-
             function selectDeal(deal) {
                 selectedDeal = deal;
                 searchInput.value = deal.id + ' - ' + deal.title;
                 closeMenu();
 
-                // Populate fields from deal data
-                setField('projectId', String(deal.id));
-                setField('clientName', deal.title);
-                setField('location', deal.address);
-                setField('phone', deal.phone);
-                setField('salesRep', deal.salesRep);
+                log('══════════════════════════════════════');
+                log('SELECTED DEAL: ' + deal.id + ' — ' + deal.title);
+                log('  address:  ' + deal.address);
+                log('  phone:    ' + deal.phone);
+                log('  salesRep: ' + deal.salesRep);
+
+                populateFields({
+                    projectId:  String(deal.id),
+                    clientName: deal.title,
+                    location:   deal.address,
+                    phone:      deal.phone,
+                    salesRep:   deal.salesRep,
+                });
 
                 // Send widget value
                 JFCustomWidget.sendData({ valid: true, value: String(deal.id) });
@@ -339,11 +470,15 @@
                 fetch(workerUrl + '/deals/' + deal.id + '/activity')
                     .then(function(resp) { return resp.json(); })
                     .then(function(activity) {
-                        setField('date', activity.due_date);
-                        setField('time', activity.due_time);
+                        log('Activity: ' + JSON.stringify(activity));
+                        populateFields({
+                            date: activity.due_date,
+                            time: activity.due_time,
+                        });
                         popEl.style.display = 'none';
                     })
-                    .catch(function() {
+                    .catch(function(err) {
+                        log('Activity fetch ERROR: ' + err.message);
                         popEl.style.display = 'none';
                     });
             }
@@ -391,16 +526,12 @@
 
             // Click to select
             menu.addEventListener('click', function(e) {
-                log('Menu click event fired');
                 var item = e.target.closest('.select-item');
-                if (!item) { log('No .select-item found in click target'); return; }
+                if (!item) return;
                 var dealId = parseInt(item.getAttribute('data-id'));
-                log('Clicked deal ID: ' + dealId);
                 var deal = allDeals.find(function(d) { return d.id === dealId; });
                 if (deal) {
-                    try { selectDeal(deal); } catch(e) { log('selectDeal ERROR: ' + e.message); }
-                } else {
-                    log('Deal not found in allDeals');
+                    try { selectDeal(deal); } catch(err) { log('selectDeal ERROR: ' + err.message); }
                 }
             });
 
