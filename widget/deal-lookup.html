@@ -239,6 +239,7 @@
                 })
                 .then(function(deals) {
                     allDeals = deals;
+                    searchInput.placeholder = 'Search ' + deals.length + ' deals by ID or name…';
                     document.getElementById('loading').style.display = 'none';
                     wrapper.style.display = '';
                     JFCustomWidget.requestFrameResize({ height: 50 });
