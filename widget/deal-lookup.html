@@ -193,13 +193,6 @@
                 log('Decoded settings: ' + JSON.stringify(decoded));
             } catch(e) { log('Settings decode error: ' + e.message); }
 
-            // Also log all available JFCustomWidget methods
-            var widgetMethods = [];
-            for (var prop in JFCustomWidget) {
-                if (typeof JFCustomWidget[prop] === 'function') widgetMethods.push(prop);
-            }
-            log('JFCustomWidget methods: ' + widgetMethods.join(', '));
-
             // Field unique names (configured via widget settings)
             var fieldNames = {
                 projectId:  getSetting('field_projectId', data),
@@ -210,36 +203,26 @@
                 time:       getSetting('field_time', data),
                 salesRep:   getSetting('field_salesRep', data),
             };
-
-            // Discover QIDs from unique names via formData
-            var qidMap = {};
-            var formDataReceived = false;
-
             log('Field names config: ' + JSON.stringify(fieldNames));
 
-            JFCustomWidget.subscribe("formData", function(formData) {
-                if (!formData) { log('formData: null'); return; }
-                log('formData received. Keys: ' + Object.keys(formData).join(', '));
-                if (formDataReceived) return;
-                formDataReceived = true;
-                var nameToKey = {};
-                for (var k in fieldNames) {
-                    if (fieldNames[k]) nameToKey[fieldNames[k].toLowerCase()] = k;
-                }
-                log('Looking for names: ' + JSON.stringify(nameToKey));
-                var keys = Object.keys(formData);
-                for (var i = 0; i < keys.length; i++) {
-                    var match = keys[i].match(/^q(\d+)_(.+)$/);
-                    if (match) {
-                        var uname = match[2].toLowerCase();
-                        if (nameToKey[uname]) {
-                            qidMap[nameToKey[uname]] = match[1];
-                            log('Mapped: ' + nameToKey[uname] + ' → QID ' + match[1]);
+            // Discover QIDs from unique names using getFieldsValueByName
+            var qidMap = {};
+            for (var k in fieldNames) {
+                if (!fieldNames[k]) continue;
+                try {
+                    var result = JFCustomWidget.getFieldsValueByName(fieldNames[k]);
+                    log('getFieldsValueByName(' + fieldNames[k] + '): ' + JSON.stringify(result));
+                    // result might be {qid: value} or similar — extract the QID
+                    if (result && typeof result === 'object') {
+                        var rkeys = Object.keys(result);
+                        if (rkeys.length > 0) {
+                            qidMap[k] = rkeys[0];
+                            log('Mapped: ' + k + ' → QID ' + rkeys[0]);
                         }
                     }
-                }
-                log('Final qidMap: ' + JSON.stringify(qidMap));
-            });
+                } catch (e) { log('getFieldsValueByName error for ' + k + ': ' + e.message); }
+            }
+            log('QID map: ' + JSON.stringify(qidMap));
 
             var allDeals = [];
             var selectedDeal = null;
@@ -318,38 +301,13 @@
 
             function setField(fieldKey, value) {
                 var qid = qidMap[fieldKey];
-                var uname = fieldNames[fieldKey];
-                if (!qid && !uname) return;
+                if (!qid) { log('setField SKIP: ' + fieldKey + ' (no QID)'); return; }
                 value = value || '';
-
-                log('setField: ' + fieldKey + ' (qid=' + qid + ', name=' + uname + ') → "' + value + '"');
-
-                // Log available methods
-                var methods = ['setFieldValueById', 'setFieldValue', 'setFieldsValueById', 'setFieldsValue'];
-                for (var m = 0; m < methods.length; m++) {
-                    log('  JFCustomWidget.' + methods[m] + ': ' + typeof JFCustomWidget[methods[m]]);
-                }
-
-                // Try multiple methods to set the field value
+                log('setField: ' + fieldKey + ' → QID ' + qid + ' = "' + value + '"');
                 try {
-                    if (typeof JFCustomWidget.setFieldValueById === 'function' && qid) {
-                        JFCustomWidget.setFieldValueById(qid, value);
-                        log('  → setFieldValueById succeeded');
-                    }
-                } catch (e) { log('  → setFieldValueById error: ' + e.message); }
-                try {
-                    if (typeof JFCustomWidget.setFieldValue === 'function' && qid) {
-                        JFCustomWidget.setFieldValue(qid, value);
-                        log('  → setFieldValue succeeded');
-                    }
-                } catch (e) { log('  → setFieldValue error: ' + e.message); }
-
-                // postMessage to parent form
-                if (qid) {
-                    window.parent.postMessage({ type: 'setFieldValue', field: 'q' + qid + '_' + (uname || ''), value: value }, '*');
-                    window.parent.postMessage({ type: 'setFieldValue', field: qid, value: value }, '*');
-                    log('  → postMessage sent');
-                }
+                    JFCustomWidget.setFieldsValueById(qid, value);
+                    log('  → setFieldsValueById OK');
+                } catch (e) { log('  → setFieldsValueById ERROR: ' + e.message); }
             }
 
             function selectDeal(deal) {
