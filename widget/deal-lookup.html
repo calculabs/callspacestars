@@ -187,45 +187,40 @@
                 console.log('[deal-lookup]', msg);
             }
 
-            // Dump ALL settings using every available method
-            log('data.settings raw: ' + data.settings);
+            // Read field unique names from URL query params (most reliable)
+            // Widget URL format: deal-lookup.html?projectId=UPID&clientName=ClientName&...
+            var urlParams = {};
             try {
-                log('getWidgetSettings(): ' + JSON.stringify(JFCustomWidget.getWidgetSettings()));
-            } catch(e) { log('getWidgetSettings error: ' + e.message); }
-
-            // Try every possible parameter name format
-            var tryNames = [
-                'field_projectId', 'field_clientName', 'field_location', 'field_phone',
-                'field_date', 'field_time', 'field_salesRep',
-                'projectId', 'clientName', 'location', 'phone', 'date', 'time', 'salesRep',
-                'Project ID (Deal ID)', 'Client Name', 'Location', 'Phone Number',
-                'Date', 'Time', 'Primary Sales Rep'
-            ];
-            for (var t = 0; t < tryNames.length; t++) {
-                var val = JFCustomWidget.getWidgetSetting(tryNames[t]);
-                if (val) log('getWidgetSetting("' + tryNames[t] + '"): ' + val);
+                var allQS = JFCustomWidget.getAllQueryString();
+                if (allQS && typeof allQS === 'object') urlParams = allQS;
+            } catch(e) {}
+            // Fallback to window.location.search
+            if (!urlParams.projectId) {
+                try {
+                    var sp = new URLSearchParams(window.location.search);
+                    sp.forEach(function(v, k) { urlParams[k] = v; });
+                } catch(e) {}
             }
 
-            // Field unique names (configured via widget settings)
+            // Field unique names: try URL params first, then widget settings
             var fieldNames = {
-                projectId:  getSetting('field_projectId', data),
-                clientName: getSetting('field_clientName', data),
-                location:   getSetting('field_location', data),
-                phone:      getSetting('field_phone', data),
-                date:       getSetting('field_date', data),
-                time:       getSetting('field_time', data),
-                salesRep:   getSetting('field_salesRep', data),
+                projectId:  urlParams.projectId  || getSetting('field_projectId', data),
+                clientName: urlParams.clientName  || getSetting('field_clientName', data),
+                location:   urlParams.location    || getSetting('field_location', data),
+                phone:      urlParams.phone       || getSetting('field_phone', data),
+                date:       urlParams.date        || getSetting('field_date', data),
+                time:       urlParams.time        || getSetting('field_time', data),
+                salesRep:   urlParams.salesRep    || getSetting('field_salesRep', data),
             };
-            log('Field names config: ' + JSON.stringify(fieldNames));
+            log('Field names: ' + JSON.stringify(fieldNames));
 
-            // Discover QIDs from unique names using getFieldsValueByName
+            // Discover QIDs from unique names
             var qidMap = {};
             for (var k in fieldNames) {
                 if (!fieldNames[k]) continue;
                 try {
                     var result = JFCustomWidget.getFieldsValueByName(fieldNames[k]);
                     log('getFieldsValueByName(' + fieldNames[k] + '): ' + JSON.stringify(result));
-                    // result might be {qid: value} or similar — extract the QID
                     if (result && typeof result === 'object') {
                         var rkeys = Object.keys(result);
                         if (rkeys.length > 0) {
