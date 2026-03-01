@@ -269,6 +269,11 @@
                 closeMenu();
             });
 
+            // Close when iframe loses focus (user clicked outside the iframe)
+            window.addEventListener('blur', function() {
+                setTimeout(closeMenu, 100);
+            });
+
             JFCustomWidget.subscribe("submit", function() {
                 JFCustomWidget.sendSubmit({
                     valid: selectedValue !== '',
