@@ -151,7 +151,6 @@
         </div>
         <div class="populating" id="populating" style="display:none">Populating fields…</div>
         <div class="error" id="errorMsg"></div>
-        <pre id="debug" style="font-size:10px;color:#999;margin-top:8px;max-height:100px;overflow:auto;display:none"></pre>
     </div>
 
     <script>
@@ -184,14 +183,22 @@
             }
             workerUrl = workerUrl.replace(/\/+$/, '');
 
-            var debugEl = document.getElementById('debug');
-            debugEl.style.display = 'block';
             function log(msg) {
                 console.log('[deal-lookup]', msg);
-                debugEl.textContent += msg + '\n';
             }
 
-            log('Widget ready. Settings: ' + JSON.stringify(data.settings ? 'present' : 'missing'));
+            log('Widget ready. Raw settings: ' + data.settings);
+            try {
+                var decoded = JSON.parse(decodeURIComponent(data.settings));
+                log('Decoded settings: ' + JSON.stringify(decoded));
+            } catch(e) { log('Settings decode error: ' + e.message); }
+
+            // Also log all available JFCustomWidget methods
+            var widgetMethods = [];
+            for (var prop in JFCustomWidget) {
+                if (typeof JFCustomWidget[prop] === 'function') widgetMethods.push(prop);
+            }
+            log('JFCustomWidget methods: ' + widgetMethods.join(', '));
 
             // Field unique names (configured via widget settings)
             var fieldNames = {
@@ -418,11 +425,17 @@
 
             // Click to select
             menu.addEventListener('click', function(e) {
+                log('Menu click event fired');
                 var item = e.target.closest('.select-item');
-                if (!item) return;
+                if (!item) { log('No .select-item found in click target'); return; }
                 var dealId = parseInt(item.getAttribute('data-id'));
+                log('Clicked deal ID: ' + dealId);
                 var deal = allDeals.find(function(d) { return d.id === dealId; });
-                if (deal) selectDeal(deal);
+                if (deal) {
+                    try { selectDeal(deal); } catch(e) { log('selectDeal ERROR: ' + e.message); }
+                } else {
+                    log('Deal not found in allDeals');
+                }
             });
 
             // Close on outside click
