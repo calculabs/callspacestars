@@ -1,3 +1,28 @@
+<!--
+  Deal Lookup Widget
+  Searches Pipedrive "Demo - Sale" deals and auto-populates form fields on selection.
+
+  SETTINGS:
+    workerUrl (required) — Cloudflare Worker URL, e.g. https://pipedrive-field-proxy.your-account.workers.dev
+
+    labelMap (optional) — Override default field label matching. Only needed if your form
+    uses different question text than the defaults below.
+
+    Defaults:
+      projectId  = "Unique Project ID"
+      clientName = "Client Name"
+      location   = "Location"
+      phone      = "Phone Number"
+      date       = "Date"
+      time       = "Time"
+      salesRep   = "Primary Sales Rep"
+
+    Example: if your form uses "Cell Phone" and "Appointment Date" instead,
+    set labelMap to:
+      phone=Cell Phone,date=Appointment Date
+
+    Only override the ones that differ — the rest keep their defaults.
+-->
 <!DOCTYPE html>
 <html>
 <head>
