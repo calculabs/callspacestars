@@ -287,85 +287,41 @@
                 }
             }
 
-            // Kitchen sink: try every approach to fill composite address
-            function populateAddress(deal) {
-                var addrLabel = labels.streetAddress || 'Project Address';
-                log('═══ ADDRESS KITCHEN SINK ═══');
-                log('Label: ' + addrLabel);
-                log('Data: street="' + deal.streetAddress + '" city="' + deal.city + '" state="' + deal.state + '" zip="' + deal.zip + '"');
-
-                // Approach 1: structured object as value
-                log('── Approach 1: object value via setFieldsValueByLabel');
-                try {
-                    JFCustomWidget.setFieldsValueByLabel([{
-                        label: addrLabel,
-                        value: {
-                            addr_line1: deal.streetAddress,
-                            city: deal.city,
-                            state: deal.state,
-                            postal: deal.zip
+            // Discover QID for composite address field, then fill sub-fields by ID
+            var addressQID = null;
+            var addressFieldName = getSetting('addressFieldName', data) || 'InfoProjectAddress';
+            log('Resolving address QID for unique name: ' + addressFieldName);
+            try {
+                JFCustomWidget.getFieldsValueByName([addressFieldName], function(result) {
+                    log('getFieldsValueByName(' + addressFieldName + ') callback: ' + JSON.stringify(result));
+                    if (result && typeof result === 'object') {
+                        var qids = Object.keys(result);
+                        if (qids.length > 0) {
+                            addressQID = qids[0];
+                            log('Address QID discovered: ' + addressQID);
                         }
-                    }]);
-                    log('  → OK');
-                } catch(e) { log('  → ERROR: ' + e.message); }
+                    }
+                    if (!addressQID) log('Address QID: NOT FOUND');
+                });
+            } catch(e) { log('Address QID discovery error: ' + e.message); }
 
-                // Approach 2: sub-label text as labels
-                log('── Approach 2: sub-label text via setFieldsValueByLabel');
-                try {
-                    JFCustomWidget.setFieldsValueByLabel([
-                        { label: 'Street Address', value: deal.streetAddress },
-                        { label: 'City', value: deal.city },
-                        { label: 'State / Province', value: deal.state },
-                        { label: 'Postal / Zip Code', value: deal.zip }
-                    ]);
-                    log('  → OK');
-                } catch(e) { log('  → ERROR: ' + e.message); }
-
-                // Approach 3: storeToField with bracket notation
-                log('── Approach 3: storeToField with bracket names');
-                var uniqueName = labels.streetAddress ? labels.streetAddress.replace(/\s+/g, '') : 'projectAddress';
-                var bracketNames = [
-                    ['[addr_line1]', deal.streetAddress],
-                    ['[city]', deal.city],
-                    ['[state]', deal.state],
-                    ['[postal]', deal.zip]
-                ];
-                for (var i = 0; i < bracketNames.length; i++) {
-                    try {
-                        var fieldName = uniqueName + bracketNames[i][0];
-                        JFCustomWidget.storeToField(fieldName, bracketNames[i][1]);
-                        log('  storeToField("' + fieldName + '", "' + bracketNames[i][1] + '") → OK');
-                    } catch(e) { log('  storeToField → ERROR: ' + e.message); }
+            function populateAddress(deal) {
+                if (!addressQID) {
+                    log('populateAddress SKIP: no QID discovered');
+                    return;
                 }
+                var subFields = [
+                    { id: addressQID + '_addr_line1', value: deal.streetAddress },
+                    { id: addressQID + '_city', value: deal.city },
+                    { id: addressQID + '_state', value: deal.state },
+                    { id: addressQID + '_postal', value: deal.zip }
+                ].filter(function(f) { return f.value; });
 
-                // Approach 4: storeToField with data-component names
-                log('── Approach 4: storeToField with data-component names');
-                var components = [
-                    ['address_line_1', deal.streetAddress],
-                    ['city', deal.city],
-                    ['state', deal.state],
-                    ['zip', deal.zip]
-                ];
-                for (var i = 0; i < components.length; i++) {
-                    try {
-                        JFCustomWidget.storeToField(components[i][0], components[i][1]);
-                        log('  storeToField("' + components[i][0] + '", "' + components[i][1] + '") → OK');
-                    } catch(e) { log('  storeToField → ERROR: ' + e.message); }
-                }
-
-                // Approach 5: setFieldsValueById with data-component names
-                log('── Approach 5: setFieldsValueById with data-component names');
+                log('populateAddress via setFieldsValueById: ' + JSON.stringify(subFields));
                 try {
-                    JFCustomWidget.setFieldsValueById([
-                        { id: 'address_line_1', value: deal.streetAddress },
-                        { id: 'city', value: deal.city },
-                        { id: 'state', value: deal.state },
-                        { id: 'zip', value: deal.zip }
-                    ]);
-                    log('  → OK');
-                } catch(e) { log('  → ERROR: ' + e.message); }
-
-                log('═══════════════════════════');
+                    JFCustomWidget.setFieldsValueById(subFields);
+                    log('populateAddress → OK');
+                } catch(e) { log('populateAddress → ERROR: ' + e.message); }
             }
 
             function filterDeals(query) {
