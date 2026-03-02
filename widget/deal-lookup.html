@@ -9,13 +9,22 @@
     uses different question text than the defaults below.
 
     Defaults:
-      projectId  = "Unique Project ID"
-      clientName = "Client Name"
-      location   = "Location"
-      phone      = "Phone Number"
-      date       = "Date"
-      time       = "Time"
-      salesRep   = "Primary Sales Rep"
+      projectId       = "Unique Project ID"
+      clientName      = "Client Name"       (full deal title — for single text fields)
+      clientFirstName = "Client Name"       (person first name — for Full Name composite fields)
+      clientLastName  = "Client Name"       (person last name — for Full Name composite fields)
+      location        = "Location"          (full address string — for single text fields)
+      streetAddress   = "Project Address"   (street — for Address composite fields)
+      city            = "Project Address"   (city — for Address composite fields)
+      state           = "Project Address"   (state — for Address composite fields)
+      zip             = "Project Address"   (zip — for Address composite fields)
+      phone           = "Phone Number"
+      date            = "Date"
+      time            = "Time"
+      salesRep        = "Primary Sales Rep"
+
+    The widget sends both single-field and composite-field values simultaneously.
+    JotForm will apply whichever ones match your form's field labels.
 
     Example: if your form uses "Cell Phone" and "Appointment Date" instead,
     set labelMap to:
@@ -211,13 +220,19 @@
             // Default field labels — override via labelMap setting:
             // "projectId=Your Label,clientName=Other Label,..."
             var labels = {
-                projectId:  'Unique Project ID',
-                clientName: 'Client Name',
-                location:   'Location',
-                phone:      'Phone Number',
-                date:       'Date',
-                time:       'Time',
-                salesRep:   'Primary Sales Rep',
+                projectId:        'Unique Project ID',
+                clientName:       'Client Name',
+                clientFirstName:  'Client Name',
+                clientLastName:   'Client Name',
+                location:         'Location',
+                streetAddress:    'Project Address',
+                city:             'Project Address',
+                state:            'Project Address',
+                zip:              'Project Address',
+                phone:            'Phone Number',
+                date:             'Date',
+                time:             'Time',
+                salesRep:         'Primary Sales Rep',
             };
             var labelMapStr = getSetting('labelMap', data);
             if (labelMapStr) {
@@ -325,11 +340,17 @@
                 closeMenu();
 
                 populateFields({
-                    projectId:  String(deal.id),
-                    clientName: deal.title,
-                    location:   deal.address,
-                    phone:      deal.phone,
-                    salesRep:   deal.salesRep,
+                    projectId:        String(deal.id),
+                    clientName:       deal.title,
+                    clientFirstName:  deal.personFirstName,
+                    clientLastName:   deal.personLastName,
+                    location:         deal.address,
+                    streetAddress:    deal.streetAddress,
+                    city:             deal.city,
+                    state:            deal.state,
+                    zip:              deal.zip,
+                    phone:            deal.phone,
+                    salesRep:         deal.salesRep,
                 });
 
                 JFCustomWidget.sendData({ valid: true, value: String(deal.id) });

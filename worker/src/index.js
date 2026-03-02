@@ -66,11 +66,29 @@ export default {
           const person = d.person_id || {};
           const phones = person.phone || [];
           const repId = d[SALES_REP_FIELD_KEY];
+
+          // Split person name into first/last
+          const personName = (typeof person === 'object' ? person.name : '') || '';
+          const nameParts = personName.trim().split(/\s+/);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          // Structured address sub-fields
+          const streetNum = d[ADDRESS_FIELD_KEY + '_street_number'] || '';
+          const route = d[ADDRESS_FIELD_KEY + '_route'] || '';
+          const streetAddress = [streetNum, route].filter(Boolean).join(' ');
+
           return {
             id: d.id,
             title: d.title,
             address: d[ADDRESS_FIELD_KEY] || '',
+            streetAddress,
+            city: d[ADDRESS_FIELD_KEY + '_locality'] || '',
+            state: d[ADDRESS_FIELD_KEY + '_admin_area_level_1'] || '',
+            zip: d[ADDRESS_FIELD_KEY + '_postal_code'] || '',
             phone: phones.length > 0 ? phones[0].value : '',
+            personFirstName: firstName,
+            personLastName: lastName,
             salesRep: repId ? (repOptions[String(repId)] || '') : '',
           };
         });
