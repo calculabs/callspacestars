@@ -10,18 +10,14 @@
 
     addressFieldName (optional) — JotForm unique name of the Address composite field.
     Default: "InfoProjectAddress". Only needed if your address field has a different
-    unique name.
+    unique name. Used for QID discovery via JotForm REST API.
 
-    Defaults:
+    Default labels (set via setFieldsValueByLabel):
       projectId       = "Unique Project ID"
-      clientName      = "Client Name"       (full deal title — for single text fields)
-      clientFirstName = "Client Name"       (person first name — for Full Name composite fields)
-      clientLastName  = "Client Name"       (person last name — for Full Name composite fields)
-      location        = "Location"          (full address string — for single text fields)
-      streetAddress   = "Project Address"   (street — for Address composite fields)
-      city            = "Project Address"   (city — for Address composite fields)
-      state           = "Project Address"   (state — for Address composite fields)
-      zip             = "Project Address"   (zip — for Address composite fields)
+      clientName      = "Client Name"       (deal title → single text OR Full Name composite)
+      clientFirstName = "Client Name"       (person first name → Full Name composite)
+      clientLastName  = "Client Name"       (person last name → Full Name composite)
+      location        = "Location"          (full address string → single text field)
       phone           = "Phone Number"
       date            = "Date"
       time            = "Time"
@@ -29,19 +25,17 @@
 
     The widget sends both single-field and composite-field values simultaneously.
     JotForm will apply whichever ones match your form's field labels.
+    For Client Name, setFieldsValueByLabel auto-splits into First/Last for Full Name
+    composite fields, and sets the full title for single text fields.
 
-    Example: if your form uses "Cell Phone" and "Appointment Date" instead,
-    set labelMap to:
-      phone=Cell Phone,date=Appointment Date
-
-    Only override the ones that differ — the rest keep their defaults.
+    Example labelMap override: phone=Cell Phone,date=Appointment Date
 
   COMPOSITE ADDRESS FIELDS:
-    The parent's fields:fill handler supports control_address in its parse() function
-    but generateCtrlItems() has no case for it. Workaround: pass an "items" object
-    directly in the fields:fill payload — the handler uses items from the payload
-    when provided, bypassing generateCtrlItems entirely. No custom code injection needed.
-    The widget auto-discovers the Address field's QID via the JotForm REST API.
+    Address sub-fields are populated via setFieldsValueById with an "items" property
+    containing { addr_line1, city, state, postal }. The widget auto-discovers the
+    Address field's QID via the JotForm REST API (no manual configuration needed).
+    The "items" property bypasses the parent's generateCtrlItems() (which has no
+    control_address case) and sends values directly to parse(), which does support it.
 -->
 <!DOCTYPE html>
 <html>
@@ -236,10 +230,6 @@
                 clientFirstName:  'Client Name',
                 clientLastName:   'Client Name',
                 location:         'Location',
-                streetAddress:    'Project Address',
-                city:             'Project Address',
-                state:            'Project Address',
-                zip:              'Project Address',
                 phone:            'Phone Number',
                 date:             'Date',
                 time:             'Time',
@@ -284,8 +274,6 @@
                     showError('Failed to load deals: ' + err.message);
                 });
 
-            function log(msg) { console.log('[deal-lookup]', msg); }
-
             function populateFields(fieldData) {
                 var labelArray = [];
                 for (var k in fieldData) {
@@ -314,9 +302,7 @@
                             }
                         }
                     })
-                    .catch(function(err) {
-                        log('JotForm fields fetch error: ' + err.message);
-                    });
+                    .catch(function() {});
             }
 
             // The parent's fields:fill handler supports control_address in parse(),
@@ -325,10 +311,7 @@
             // bypassing generateCtrlItems entirely (for-widgets-server.js line 2096).
             function populateAddress(deal) {
                 var qid = compositeQIDs[addressFieldName];
-                if (!qid) {
-                    log('populateAddress: no QID for ' + addressFieldName + ', skipping');
-                    return;
-                }
+                if (!qid) return;
                 var items = {};
                 if (deal.streetAddress) items.addr_line1 = deal.streetAddress;
                 if (deal.city) items.city = deal.city;
@@ -340,7 +323,6 @@
                 JFCustomWidget.setFieldsValueById([
                     { id: String(qid), value: fullAddress, items: items }
                 ]);
-                log('populateAddress QID ' + qid + ': ' + JSON.stringify(items));
             }
 
             function filterDeals(query) {
