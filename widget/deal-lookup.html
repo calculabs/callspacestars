@@ -287,41 +287,86 @@
                 }
             }
 
-            // Discover QID for composite address field, then fill sub-fields by ID
-            var addressQID = null;
+            // Composite address: try multiple approaches to fill sub-fields
             var addressFieldName = getSetting('addressFieldName', data) || 'InfoProjectAddress';
-            log('Resolving address QID for unique name: ' + addressFieldName);
-            try {
-                JFCustomWidget.getFieldsValueByName([addressFieldName], function(result) {
-                    log('getFieldsValueByName(' + addressFieldName + ') callback: ' + JSON.stringify(result));
-                    if (result && typeof result === 'object') {
-                        var qids = Object.keys(result);
-                        if (qids.length > 0) {
-                            addressQID = qids[0];
-                            log('Address QID discovered: ' + addressQID);
-                        }
-                    }
-                    if (!addressQID) log('Address QID: NOT FOUND');
-                });
-            } catch(e) { log('Address QID discovery error: ' + e.message); }
 
             function populateAddress(deal) {
-                if (!addressQID) {
-                    log('populateAddress SKIP: no QID discovered');
-                    return;
-                }
-                var subFields = [
-                    { id: addressQID + '_addr_line1', value: deal.streetAddress },
-                    { id: addressQID + '_city', value: deal.city },
-                    { id: addressQID + '_state', value: deal.state },
-                    { id: addressQID + '_postal', value: deal.zip }
-                ].filter(function(f) { return f.value; });
+                log('═══ ADDRESS POPULATE ═══');
+                log('uniqueName: ' + addressFieldName);
+                log('Data: street="' + deal.streetAddress + '" city="' + deal.city + '" state="' + deal.state + '" zip="' + deal.zip + '"');
 
-                log('populateAddress via setFieldsValueById: ' + JSON.stringify(subFields));
+                var subFields = [
+                    ['addr_line1', deal.streetAddress],
+                    ['city', deal.city],
+                    ['state', deal.state],
+                    ['postal', deal.zip]
+                ];
+
+                // Approach A: storeToField with uniqueName[subfield]
+                log('── A: storeToField("' + addressFieldName + '[subfield]")');
+                for (var i = 0; i < subFields.length; i++) {
+                    try {
+                        var name = addressFieldName + '[' + subFields[i][0] + ']';
+                        JFCustomWidget.storeToField(name, subFields[i][1]);
+                        log('  ' + name + ' = "' + subFields[i][1] + '" → OK');
+                    } catch(e) { log('  → ERROR: ' + e.message); }
+                }
+
+                // Approach B: storeToField with uniqueName_subfield
+                log('── B: storeToField("' + addressFieldName + '_subfield")');
+                for (var i = 0; i < subFields.length; i++) {
+                    try {
+                        var name = addressFieldName + '_' + subFields[i][0];
+                        JFCustomWidget.storeToField(name, subFields[i][1]);
+                        log('  ' + name + ' = "' + subFields[i][1] + '" → OK');
+                    } catch(e) { log('  → ERROR: ' + e.message); }
+                }
+
+                // Approach C: setFieldsValueByLabel with "label#subfield" or "label.subfield"
+                log('── C: setFieldsValueByLabel with subfield hints');
+                var addrLabel = labels.streetAddress || 'Project Address';
                 try {
-                    JFCustomWidget.setFieldsValueById(subFields);
-                    log('populateAddress → OK');
-                } catch(e) { log('populateAddress → ERROR: ' + e.message); }
+                    JFCustomWidget.setFieldsValueByLabel([
+                        { label: addrLabel, value: deal.streetAddress, subfield: 'addr_line1' },
+                        { label: addrLabel, value: deal.city, subfield: 'city' },
+                        { label: addrLabel, value: deal.state, subfield: 'state' },
+                        { label: addrLabel, value: deal.zip, subfield: 'postal' }
+                    ]);
+                    log('  → OK');
+                } catch(e) { log('  → ERROR: ' + e.message); }
+
+                // Approach D: raw postMessage with sub-field IDs
+                // getFieldsValueByName to discover QID, then fill by QID_subfield
+                log('── D: discover QID then setFieldsValueById with QID_subfield');
+                try {
+                    JFCustomWidget.getFieldsValueByName([addressFieldName], function(result) {
+                        log('  getFieldsValueByName result: ' + JSON.stringify(result));
+                        // Try to extract QID from data array
+                        var qid = null;
+                        if (result && result.data && result.data[0]) {
+                            // Check if there's a qid property
+                            qid = result.data[0].qid || result.data[0].id || null;
+                            log('  Extracted qid from data: ' + qid);
+                        }
+                        // Also try: the selector might map to a form element we can reference
+                        if (!qid && result && result.data && result.data[0]) {
+                            log('  No QID in response. data[0] keys: ' + JSON.stringify(Object.keys(result.data[0])));
+                        }
+                        if (qid) {
+                            var idFields = [
+                                { id: qid + '_addr_line1', value: deal.streetAddress },
+                                { id: qid + '_city', value: deal.city },
+                                { id: qid + '_state', value: deal.state },
+                                { id: qid + '_postal', value: deal.zip }
+                            ].filter(function(f) { return f.value; });
+                            log('  setFieldsValueById: ' + JSON.stringify(idFields));
+                            JFCustomWidget.setFieldsValueById(idFields);
+                            log('  → OK');
+                        }
+                    });
+                } catch(e) { log('  → ERROR: ' + e.message); }
+
+                log('═══════════════════════');
             }
 
             function filterDeals(query) {
