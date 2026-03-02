@@ -8,6 +8,10 @@
     labelMap (optional) — Override default field label matching. Only needed if your form
     uses different question text than the defaults below.
 
+    addressFieldName (optional) — JotForm unique name of the Address composite field.
+    Default: "InfoProjectAddress". Only needed if your address field has a different
+    unique name.
+
     Defaults:
       projectId       = "Unique Project ID"
       clientName      = "Client Name"       (full deal title — for single text fields)
@@ -31,6 +35,13 @@
       phone=Cell Phone,date=Appointment Date
 
     Only override the ones that differ — the rest keep their defaults.
+
+  COMPOSITE ADDRESS FIELDS:
+    The parent's fields:fill handler supports control_address in its parse() function
+    but generateCtrlItems() has no case for it. Workaround: pass an "items" object
+    directly in the fields:fill payload — the handler uses items from the payload
+    when provided, bypassing generateCtrlItems entirely. No custom code injection needed.
+    The widget auto-discovers the Address field's QID via the JotForm REST API.
 -->
 <!DOCTYPE html>
 <html>
@@ -293,87 +304,43 @@
             var formId = data.formID || '';
 
             if (formId) {
-                log('Fetching JotForm field QIDs for form ' + formId);
                 fetch(workerUrl + '/jotform-fields/' + formId)
                     .then(function(resp) { return resp.json(); })
                     .then(function(fields) {
-                        log('JotForm fields: ' + JSON.stringify(fields));
-                        // Map unique names to QIDs for composite fields
                         for (var name in fields) {
                             var f = fields[name];
                             if (f.type === 'control_address' || f.type === 'control_fullname') {
                                 compositeQIDs[name] = f.qid;
-                                log('Composite field: ' + name + ' → QID ' + f.qid + ' (' + f.type + ')');
                             }
-                        }
-                        if (compositeQIDs[addressFieldName]) {
-                            log('Address QID: ' + compositeQIDs[addressFieldName]);
-                        } else {
-                            log('Address field "' + addressFieldName + '" not found in form');
                         }
                     })
                     .catch(function(err) {
                         log('JotForm fields fetch error: ' + err.message);
                     });
-            } else {
-                log('No formID available — cannot discover composite QIDs');
             }
 
+            // The parent's fields:fill handler supports control_address in parse(),
+            // but generateCtrlItems has no case for it. Fix: pass "items" directly
+            // in the payload — the handler uses items from the payload when provided,
+            // bypassing generateCtrlItems entirely (for-widgets-server.js line 2096).
             function populateAddress(deal) {
                 var qid = compositeQIDs[addressFieldName];
                 if (!qid) {
-                    log('populateAddress SKIP: no QID for ' + addressFieldName);
+                    log('populateAddress: no QID for ' + addressFieldName + ', skipping');
                     return;
                 }
-                log('═══ ADDRESS POPULATE QID=' + qid + ' ═══');
+                var items = {};
+                if (deal.streetAddress) items.addr_line1 = deal.streetAddress;
+                if (deal.city) items.city = deal.city;
+                if (deal.state) items.state = deal.state;
+                if (deal.zip) items.postal = deal.zip;
+                if (Object.keys(items).length === 0) return;
 
-                var parts = [
-                    ['addr_line1', deal.streetAddress],
-                    ['city', deal.city],
-                    ['state', deal.state],
-                    ['postal', deal.zip]
-                ];
-
-                // Format A: "59_addr_line1" (already tried, trying again for log clarity)
-                log('── A: setFieldsValueById with QID_subfield');
-                var a = parts.map(function(p) { return { id: qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; });
-                try { JFCustomWidget.setFieldsValueById(a); log('  ' + JSON.stringify(a) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
-
-                // Format B: "input_59_addr_line1" (actual DOM input ID)
-                log('── B: setFieldsValueById with input_QID_subfield');
-                var b = parts.map(function(p) { return { id: 'input_' + qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; });
-                try { JFCustomWidget.setFieldsValueById(b); log('  ' + JSON.stringify(b) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
-
-                // Format C: "q59_projectAddress[addr_line1]" (name attribute format)
-                log('── C: setFieldsValueById with name attribute format');
-                var c = parts.map(function(p) { return { id: 'q' + qid + '_' + addressFieldName + '[' + p[0] + ']', value: p[1] }; }).filter(function(f) { return f.value; });
-                try { JFCustomWidget.setFieldsValueById(c); log('  ' + JSON.stringify(c) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
-
-                // Format D: raw postMessage mimicking fields:fill
-                log('── D: raw postMessage with input_QID_subfield');
-                try {
-                    var msg = {
-                        type: 'fields:fill',
-                        fields: parts.map(function(p) { return { id: 'input_' + qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; }),
-                        qid: String(data.widgetID || ''),
-                        identifier: 'id'
-                    };
-                    window.parent.postMessage(JSON.stringify(msg), '*');
-                    log('  postMessage sent: ' + JSON.stringify(msg));
-                } catch(e) { log('  → ERROR: ' + e.message); }
-
-                // Format E: storeToField with QID-based name
-                log('── E: storeToField with q{QID}_{name}[subfield]');
-                for (var i = 0; i < parts.length; i++) {
-                    if (!parts[i][1]) continue;
-                    try {
-                        var fname = 'q' + qid + '_projectAddress[' + parts[i][0] + ']';
-                        JFCustomWidget.storeToField(fname, parts[i][1]);
-                        log('  storeToField("' + fname + '") → OK');
-                    } catch(e) { log('  → ERROR: ' + e.message); }
-                }
-
-                log('═══════════════════════════');
+                var fullAddress = [deal.streetAddress, deal.city, deal.state, deal.zip].filter(Boolean).join(', ');
+                JFCustomWidget.setFieldsValueById([
+                    { id: String(qid), value: fullAddress, items: items }
+                ]);
+                log('populateAddress QID ' + qid + ': ' + JSON.stringify(items));
             }
 
             function filterDeals(query) {
@@ -440,7 +407,6 @@
                     salesRep:         deal.salesRep,
                 });
 
-                // Try every approach for composite address
                 populateAddress(deal);
 
                 JFCustomWidget.sendData({ valid: true, value: String(deal.id) });
