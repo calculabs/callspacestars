@@ -325,18 +325,55 @@
                     log('populateAddress SKIP: no QID for ' + addressFieldName);
                     return;
                 }
-                var subFields = [
-                    { id: qid + '_addr_line1', value: deal.streetAddress },
-                    { id: qid + '_city', value: deal.city },
-                    { id: qid + '_state', value: deal.state },
-                    { id: qid + '_postal', value: deal.zip }
-                ].filter(function(f) { return f.value; });
+                log('═══ ADDRESS POPULATE QID=' + qid + ' ═══');
 
-                log('populateAddress QID=' + qid + ': ' + JSON.stringify(subFields));
+                var parts = [
+                    ['addr_line1', deal.streetAddress],
+                    ['city', deal.city],
+                    ['state', deal.state],
+                    ['postal', deal.zip]
+                ];
+
+                // Format A: "59_addr_line1" (already tried, trying again for log clarity)
+                log('── A: setFieldsValueById with QID_subfield');
+                var a = parts.map(function(p) { return { id: qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; });
+                try { JFCustomWidget.setFieldsValueById(a); log('  ' + JSON.stringify(a) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
+
+                // Format B: "input_59_addr_line1" (actual DOM input ID)
+                log('── B: setFieldsValueById with input_QID_subfield');
+                var b = parts.map(function(p) { return { id: 'input_' + qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; });
+                try { JFCustomWidget.setFieldsValueById(b); log('  ' + JSON.stringify(b) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
+
+                // Format C: "q59_projectAddress[addr_line1]" (name attribute format)
+                log('── C: setFieldsValueById with name attribute format');
+                var c = parts.map(function(p) { return { id: 'q' + qid + '_' + addressFieldName + '[' + p[0] + ']', value: p[1] }; }).filter(function(f) { return f.value; });
+                try { JFCustomWidget.setFieldsValueById(c); log('  ' + JSON.stringify(c) + ' → OK'); } catch(e) { log('  → ERROR: ' + e.message); }
+
+                // Format D: raw postMessage mimicking fields:fill
+                log('── D: raw postMessage with input_QID_subfield');
                 try {
-                    JFCustomWidget.setFieldsValueById(subFields);
-                    log('populateAddress → OK');
-                } catch(e) { log('populateAddress → ERROR: ' + e.message); }
+                    var msg = {
+                        type: 'fields:fill',
+                        fields: parts.map(function(p) { return { id: 'input_' + qid + '_' + p[0], value: p[1] }; }).filter(function(f) { return f.value; }),
+                        qid: String(data.widgetID || ''),
+                        identifier: 'id'
+                    };
+                    window.parent.postMessage(JSON.stringify(msg), '*');
+                    log('  postMessage sent: ' + JSON.stringify(msg));
+                } catch(e) { log('  → ERROR: ' + e.message); }
+
+                // Format E: storeToField with QID-based name
+                log('── E: storeToField with q{QID}_{name}[subfield]');
+                for (var i = 0; i < parts.length; i++) {
+                    if (!parts[i][1]) continue;
+                    try {
+                        var fname = 'q' + qid + '_projectAddress[' + parts[i][0] + ']';
+                        JFCustomWidget.storeToField(fname, parts[i][1]);
+                        log('  storeToField("' + fname + '") → OK');
+                    } catch(e) { log('  → ERROR: ' + e.message); }
+                }
+
+                log('═══════════════════════════');
             }
 
             function filterDeals(query) {
