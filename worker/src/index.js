@@ -118,6 +118,24 @@ export default {
         }, 200, origin);
       }
 
+      // --- GET /jotform-fields/:formId — JotForm form field QIDs ---
+      const jfMatch = url.pathname.match(/^\/jotform-fields\/(\d+)$/);
+      if (jfMatch) {
+        const formId = jfMatch[1];
+        const resp = await fetch(`https://api.jotform.com/form/${formId}/questions?apiKey=${env.JOTFORM_API_KEY}`);
+        if (!resp.ok) throw new Error(`JotForm API error: ${resp.status}`);
+        const json = await resp.json();
+        const questions = json.content || {};
+        // Return map of { uniqueName: { qid, type, text } }
+        const fields = {};
+        for (const [qid, q] of Object.entries(questions)) {
+          if (q.name) {
+            fields[q.name] = { qid, type: q.type, text: q.text };
+          }
+        }
+        return jsonResponse(fields, 200, origin);
+      }
+
       // --- GET /deal-fields/:key — field options lookup (existing) ---
       const fieldMatch = url.pathname.match(/^\/deal-fields\/([a-fA-F0-9]+)$/);
       if (!fieldMatch) {
