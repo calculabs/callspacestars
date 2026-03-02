@@ -122,7 +122,7 @@ export default {
       const jfMatch = url.pathname.match(/^\/jotform-fields\/(\d+)$/);
       if (jfMatch) {
         const formId = jfMatch[1];
-        const resp = await fetch(`https://api.jotform.com/form/${formId}/questions?apiKey=${env.JOTFORM_API_KEY}`);
+        const resp = await fetch(`https://eu-api.jotform.com/form/${formId}/questions?apiKey=${env.JOTFORM_API_KEY}`);
         if (!resp.ok) throw new Error(`JotForm API error: ${resp.status}`);
         const json = await resp.json();
         const questions = json.content || {};
