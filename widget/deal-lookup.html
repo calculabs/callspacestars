@@ -328,12 +328,12 @@
                 }
 
                 var ph = compositeQIDs[phoneFieldName];
-                if (ph && (deal.phoneArea || deal.phoneNumber)) {
-                    var phoneItems = {};
+                if (ph && deal.phone) {
+                    var phoneItems = { full: deal.phone };
                     if (deal.phoneArea) phoneItems.area = deal.phoneArea;
                     if (deal.phoneNumber) phoneItems.phone = deal.phoneNumber;
                     JFCustomWidget.setFieldsValueById([
-                        { id: String(ph.qid), value: deal.phone || '', items: phoneItems }
+                        { id: String(ph.qid), value: deal.phone, items: phoneItems }
                     ]);
                 }
             }
