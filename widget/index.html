@@ -167,8 +167,10 @@
             var fieldId = getSetting('fieldId', data);
             var placeholder = getSetting('placeholder', data) || '— Select —';
 
-            if (!workerUrl || !fieldId) {
-                showError('Missing required settings: workerUrl and fieldId must be configured.');
+            var apiKey = getSetting('apiKey', data);
+
+            if (!workerUrl || !fieldId || !apiKey) {
+                showError('Missing required settings: workerUrl, fieldId, and apiKey must be configured.');
                 return;
             }
 
@@ -182,7 +184,7 @@
 
             var url = workerUrl.replace(/\/+$/, '') + '/deal-fields/' + encodeURIComponent(fieldId);
 
-            fetch(url)
+            fetch(url, { headers: { 'Authorization': 'Bearer ' + apiKey } })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('API returned ' + resp.status);
                     return resp.json();

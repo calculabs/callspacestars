@@ -4,6 +4,7 @@
 
   SETTINGS:
     workerUrl (required) — Cloudflare Worker URL, e.g. https://pipedrive-field-proxy.your-account.workers.dev
+    apiKey    (required) — API key for authenticating with the Worker (sent as Bearer token)
 
     labelMap (optional) — Override default field label matching. Only needed if your form
     uses different question text than the defaults below.
@@ -224,6 +225,13 @@
             }
             workerUrl = workerUrl.replace(/\/+$/, '');
 
+            var apiKey = getSetting('apiKey', data);
+            if (!apiKey) {
+                showError('Missing required setting: apiKey');
+                return;
+            }
+            var authHeaders = { 'Authorization': 'Bearer ' + apiKey };
+
             // Default field labels — override via labelMap setting:
             // "projectId=Your Label,clientName=Other Label,..."
             var labels = {
@@ -260,7 +268,7 @@
             var wrapper = document.getElementById('selectWrapper');
 
             // Fetch all Demo-Sale deals
-            fetch(workerUrl + '/deals')
+            fetch(workerUrl + '/deals', { headers: authHeaders })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('API returned ' + resp.status);
                     return resp.json();
@@ -295,7 +303,7 @@
             var formId = data.formID || '';
 
             if (formId) {
-                fetch(workerUrl + '/jotform-fields/' + formId)
+                fetch(workerUrl + '/jotform-fields/' + formId, { headers: authHeaders })
                     .then(function(resp) { return resp.json(); })
                     .then(function(fields) {
                         for (var name in fields) {
@@ -412,7 +420,7 @@
                 // Fetch activity for date/time
                 var popEl = document.getElementById('populating');
                 popEl.style.display = '';
-                fetch(workerUrl + '/deals/' + deal.id + '/activity')
+                fetch(workerUrl + '/deals/' + deal.id + '/activity', { headers: authHeaders })
                     .then(function(resp) { return resp.json(); })
                     .then(function(activity) {
                         populateFields({
