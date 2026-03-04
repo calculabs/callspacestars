@@ -65,6 +65,8 @@ export default {
         const deals = (json.data || []).map(d => {
           const person = d.person_id || {};
           const phones = person.phone || [];
+          const rawPhone = phones.length > 0 ? phones[0].value : '';
+          const digits = rawPhone.replace(/\D/g, '');
           const repId = d[SALES_REP_FIELD_KEY];
 
           // Split person name into first/last
@@ -86,7 +88,9 @@ export default {
             city: d[ADDRESS_FIELD_KEY + '_locality'] || '',
             state: d[ADDRESS_FIELD_KEY + '_admin_area_level_1'] || '',
             zip: d[ADDRESS_FIELD_KEY + '_postal_code'] || '',
-            phone: phones.length > 0 ? phones[0].value : '',
+            phone: rawPhone,
+            phoneArea: digits.length >= 10 ? digits.slice(0, 3) : '',
+            phoneNumber: digits.length >= 10 ? digits.slice(3, 10) : digits,
             personFirstName: firstName,
             personLastName: lastName,
             salesRep: repId ? (repOptions[String(repId)] || '') : '',

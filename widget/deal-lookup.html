@@ -9,8 +9,10 @@
     uses different question text than the defaults below.
 
     addressFieldName (optional) — JotForm unique name of the Address composite field.
-    Default: "InfoProjectAddress". Only needed if your address field has a different
-    unique name. Used for QID discovery via JotForm REST API.
+    Default: "InfoProjectAddress".
+
+    phoneFieldName (optional) — JotForm unique name of the Phone composite field.
+    Default: "InfoClientPhone".
 
     Default labels (set via setFieldsValueByLabel):
       projectId       = "Unique Project ID"
@@ -287,8 +289,9 @@
             }
 
             // Discover QIDs for composite fields via JotForm REST API
-            var compositeQIDs = {}; // { uniqueName: qid }
+            var compositeQIDs = {}; // { uniqueName: { qid, type } }
             var addressFieldName = getSetting('addressFieldName', data) || 'InfoProjectAddress';
+            var phoneFieldName = getSetting('phoneFieldName', data) || 'InfoClientPhone';
             var formId = data.formID || '';
 
             if (formId) {
@@ -297,32 +300,42 @@
                     .then(function(fields) {
                         for (var name in fields) {
                             var f = fields[name];
-                            if (f.type === 'control_address' || f.type === 'control_fullname') {
-                                compositeQIDs[name] = f.qid;
+                            if (f.type === 'control_address' || f.type === 'control_fullname' || f.type === 'control_phone') {
+                                compositeQIDs[name] = { qid: f.qid, type: f.type };
                             }
                         }
                     })
                     .catch(function() {});
             }
 
-            // The parent's fields:fill handler supports control_address in parse(),
-            // but generateCtrlItems has no case for it. Fix: pass "items" directly
-            // in the payload — the handler uses items from the payload when provided,
-            // bypassing generateCtrlItems entirely (for-widgets-server.js line 2096).
-            function populateAddress(deal) {
-                var qid = compositeQIDs[addressFieldName];
-                if (!qid) return;
-                var items = {};
-                if (deal.streetAddress) items.addr_line1 = deal.streetAddress;
-                if (deal.city) items.city = deal.city;
-                if (deal.state) items.state = deal.state;
-                if (deal.zip) items.postal = deal.zip;
-                if (Object.keys(items).length === 0) return;
+            // Composite fields need "items" passed directly in the payload.
+            // The parent's parse() supports them but generateCtrlItems() doesn't
+            // handle address and may mangle phone formatting.
+            function populateCompositeFields(deal) {
+                var addr = compositeQIDs[addressFieldName];
+                if (addr) {
+                    var addrItems = {};
+                    if (deal.streetAddress) addrItems.addr_line1 = deal.streetAddress;
+                    if (deal.city) addrItems.city = deal.city;
+                    if (deal.state) addrItems.state = deal.state;
+                    if (deal.zip) addrItems.postal = deal.zip;
+                    if (Object.keys(addrItems).length > 0) {
+                        var fullAddr = [deal.streetAddress, deal.city, deal.state, deal.zip].filter(Boolean).join(', ');
+                        JFCustomWidget.setFieldsValueById([
+                            { id: String(addr.qid), value: fullAddr, items: addrItems }
+                        ]);
+                    }
+                }
 
-                var fullAddress = [deal.streetAddress, deal.city, deal.state, deal.zip].filter(Boolean).join(', ');
-                JFCustomWidget.setFieldsValueById([
-                    { id: String(qid), value: fullAddress, items: items }
-                ]);
+                var ph = compositeQIDs[phoneFieldName];
+                if (ph && (deal.phoneArea || deal.phoneNumber)) {
+                    var phoneItems = {};
+                    if (deal.phoneArea) phoneItems.area = deal.phoneArea;
+                    if (deal.phoneNumber) phoneItems.phone = deal.phoneNumber;
+                    JFCustomWidget.setFieldsValueById([
+                        { id: String(ph.qid), value: deal.phone || '', items: phoneItems }
+                    ]);
+                }
             }
 
             function filterDeals(query) {
@@ -371,6 +384,9 @@
             function closeMenu() {
                 menu.classList.remove('open');
                 trigger.classList.remove('open');
+                if (selectedDeal) {
+                    searchInput.value = selectedDeal.id + ' - ' + selectedDeal.title;
+                }
                 JFCustomWidget.requestFrameResize({ height: 50 });
             }
 
@@ -389,7 +405,7 @@
                     salesRep:         deal.salesRep,
                 });
 
-                populateAddress(deal);
+                populateCompositeFields(deal);
 
                 JFCustomWidget.sendData({ valid: true, value: String(deal.id) });
 
@@ -410,8 +426,9 @@
                     });
             }
 
-            // Input events
+            // On focus: clear input text so user can search fresh, show full list
             searchInput.addEventListener('focus', function() {
+                searchInput.value = '';
                 openMenu();
             });
 
