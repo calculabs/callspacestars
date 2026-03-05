@@ -14,7 +14,7 @@ const ADDRESS_FIELD_KEY = 'c2f35ff46a62827ff9fd000e9fc7480a1fee3a43';
 function corsHeaders(origin) {
   const headers = {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
   if (ALLOWED_ORIGINS.includes(origin)) {
@@ -48,6 +48,13 @@ export default {
 
     if (request.method !== 'GET') {
       return jsonResponse({ error: 'Method not allowed' }, 405, origin);
+    }
+
+    // Require API key on all requests
+    const authHeader = request.headers.get('Authorization') || '';
+    const apiKey = authHeader.replace(/^Bearer\s+/i, '');
+    if (!env.WORKER_API_KEY || apiKey !== env.WORKER_API_KEY) {
+      return jsonResponse({ error: 'Unauthorized' }, 401, origin);
     }
 
     try {
@@ -115,12 +122,22 @@ export default {
         const activity = undone[0] || done[0] || null;
 
         if (!activity) {
-          return jsonResponse({ due_date: '', due_time: '' }, 200, origin);
+          return jsonResponse({ due_date: '', due_time: '', assignedTo: '' }, 200, origin);
+        }
+
+        // Resolve assigned user ID to name
+        let assignedTo = '';
+        if (activity.user_id) {
+          try {
+            const userJson = await pipedrive(`/users/${activity.user_id}`, env.PIPEDRIVE_API_TOKEN);
+            assignedTo = userJson.data?.name || '';
+          } catch (e) { /* ignore */ }
         }
 
         return jsonResponse({
           due_date: activity.due_date || '',
           due_time: activity.due_time || '',
+          assignedTo,
         }, 200, origin);
       }
 

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:developers.pipedrive.com)",
+      "WebSearch",
+      "WebFetch(domain:www.jotform.com)",
+      "WebFetch(domain:pipedrive.readme.io)",
+      "WebFetch(domain:developers.jotform.com)",
+      "Bash(git -C /Users/andyabelow/Repositories/jotform-calculate-choices config --get user.name)",
+      "Bash(git -C /Users/andyabelow/Repositories/jotform-calculate-choices config --get user.email)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm run deploy:*)",
+      "Bash(curl -s https://pipedrive-field-proxy.callspacestars.workers.dev/deal-fields/cd1e12ac86b15f907652c0b063f474dba9246ecc)",
+      "Bash(npx wrangler secret:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:js.jotform.com)",
+      "Bash(npx wrangler:*)",
+      "Bash(tr ;:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx prettier@3:*)"
+    ]
+  }
+}

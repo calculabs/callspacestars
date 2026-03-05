@@ -410,7 +410,7 @@
                     clientLastName:   deal.personLastName,
                     location:         deal.address,
                     phone:            deal.phone,
-                    salesRep:         deal.salesRep,
+                    // salesRep comes from activity assignedTo, not deal
                 });
 
                 populateCompositeFields(deal);
@@ -426,6 +426,7 @@
                         populateFields({
                             date: activity.due_date,
                             time: activity.due_time,
+                            salesRep: activity.assignedTo,
                         });
                         popEl.style.display = 'none';
                     })
