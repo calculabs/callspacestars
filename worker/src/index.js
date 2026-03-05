@@ -114,11 +114,12 @@ export default {
       if (activityMatch) {
         const dealId = activityMatch[1];
         const json = await pipedrive(`/deals/${dealId}/activities`, env.PIPEDRIVE_API_TOKEN);
-        const activities = json.data || [];
+        // Filter to Net Issued Appointment activities only
+        const niaActivities = (json.data || []).filter(a => a.type === 'net_issued_appointment');
 
-        // Prefer most recent undone activity, fallback to most recent done
-        const undone = activities.filter(a => !a.done).sort((a, b) => (b.due_date || '').localeCompare(a.due_date || ''));
-        const done = activities.filter(a => a.done).sort((a, b) => (b.due_date || '').localeCompare(a.due_date || ''));
+        // Prefer most recent undone, fallback to most recent done
+        const undone = niaActivities.filter(a => !a.done).sort((a, b) => (b.due_date || '').localeCompare(a.due_date || ''));
+        const done = niaActivities.filter(a => a.done).sort((a, b) => (b.due_date || '').localeCompare(a.due_date || ''));
         const activity = undone[0] || done[0] || null;
 
         if (!activity) {
