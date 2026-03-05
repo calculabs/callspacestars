@@ -241,36 +241,34 @@
                 JFCustomWidget.requestFrameResize({ height: 50 });
             }
 
-            // Select an item
-            menu.addEventListener('click', function(e) {
-                var item = e.target.closest('.select-item');
-                if (!item) return;
-
-                selectedValue = item.getAttribute('data-value');
-
-                // Update trigger label
-                triggerLabel.textContent = selectedValue;
+            function selectByValue(val) {
+                selectedValue = val;
+                triggerLabel.textContent = val;
                 triggerLabel.classList.remove('placeholder');
 
-                // Update selected state
                 var items = menu.querySelectorAll('.select-item');
                 for (var i = 0; i < items.length; i++) {
                     items[i].classList.remove('selected');
                     var check = items[i].querySelector('.check');
                     if (check) check.remove();
+                    if (items[i].getAttribute('data-value') === val) {
+                        items[i].classList.add('selected');
+                        var checkmark = document.createElement('span');
+                        checkmark.className = 'check';
+                        checkmark.textContent = '✓';
+                        items[i].appendChild(checkmark);
+                    }
                 }
-                item.classList.add('selected');
-                var checkmark = document.createElement('span');
-                checkmark.className = 'check';
-                checkmark.textContent = '✓';
-                item.appendChild(checkmark);
 
+                JFCustomWidget.sendData({ valid: true, value: val });
+            }
+
+            // Select an item
+            menu.addEventListener('click', function(e) {
+                var item = e.target.closest('.select-item');
+                if (!item) return;
+                selectByValue(item.getAttribute('data-value'));
                 closeMenu();
-
-                JFCustomWidget.sendData({
-                    valid: true,
-                    value: selectedValue
-                });
             });
 
             // Close on outside click
@@ -288,6 +286,12 @@
                     valid: selectedValue !== '',
                     value: selectedValue
                 });
+            });
+
+            // Allow external population (e.g. from deal-lookup widget via setFieldsValueByLabel)
+            JFCustomWidget.subscribe("populate", function(data) {
+                var val = data.value || '';
+                if (val) selectByValue(val);
             });
         });
     </script>
