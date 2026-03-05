@@ -160,6 +160,15 @@ export default {
         return jsonResponse(fields, 200, origin);
       }
 
+      // --- GET /users — Pipedrive users as dropdown options ---
+      if (url.pathname === '/users') {
+        const json = await pipedrive('/users', env.PIPEDRIVE_API_TOKEN);
+        const users = (json.data || [])
+          .filter(u => u.active_flag)
+          .map(u => ({ label: u.name, id: u.id }));
+        return jsonResponse({ options: users }, 200, origin);
+      }
+
       // --- GET /deal-fields/:key — field options lookup (existing) ---
       const fieldMatch = url.pathname.match(/^\/deal-fields\/([a-fA-F0-9]+)$/);
       if (!fieldMatch) {

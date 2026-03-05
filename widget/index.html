@@ -164,13 +164,17 @@
 
         JFCustomWidget.subscribe("ready", function(data) {
             var workerUrl = getSetting('workerUrl', data);
+            var source = getSetting('source', data) || 'deal-field';
             var fieldId = getSetting('fieldId', data);
             var placeholder = getSetting('placeholder', data) || '— Select —';
-
             var apiKey = getSetting('apiKey', data);
 
-            if (!workerUrl || !fieldId || !apiKey) {
-                showError('Missing required settings: workerUrl, fieldId, and apiKey must be configured.');
+            if (!workerUrl || !apiKey) {
+                showError('Missing required settings: workerUrl and apiKey must be configured.');
+                return;
+            }
+            if (source === 'deal-field' && !fieldId) {
+                showError('Missing required setting: fieldId (required when source=deal-field).');
                 return;
             }
 
@@ -182,7 +186,10 @@
 
             triggerLabel.textContent = placeholder;
 
-            var url = workerUrl.replace(/\/+$/, '') + '/deal-fields/' + encodeURIComponent(fieldId);
+            var baseUrl = workerUrl.replace(/\/+$/, '');
+            var url = source === 'users'
+                ? baseUrl + '/users'
+                : baseUrl + '/deal-fields/' + encodeURIComponent(fieldId);
 
             fetch(url, { headers: { 'Authorization': 'Bearer ' + apiKey } })
                 .then(function(resp) {
