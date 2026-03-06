@@ -288,11 +288,16 @@
                 });
             });
 
-            // Allow external population (e.g. from deal-lookup widget via setFieldsValueByLabel)
-            JFCustomWidget.subscribe("populate", function(data) {
-                var val = data.value || '';
-                if (val) selectByValue(val);
-            });
+            // Listen for broadcast from sibling widgets (e.g. deal-lookup)
+            var listenFor = getSetting('listenFor', data);
+            if (listenFor) {
+                var bc = new BroadcastChannel('callspacestars-widget');
+                bc.addEventListener('message', function(e) {
+                    if (e.data && e.data.field === listenFor && e.data.value) {
+                        selectByValue(e.data.value);
+                    }
+                });
+            }
         });
     </script>
 </body>
