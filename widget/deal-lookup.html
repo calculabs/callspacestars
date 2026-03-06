@@ -428,11 +428,9 @@
                             time: activity.due_time,
                         });
                         // Broadcast salesRep to sibling widgets (same origin)
-                        if (activity.assignedTo) {
-                            var bc = new BroadcastChannel('callspacestars-widget');
-                            bc.postMessage({ field: 'salesRep', value: activity.assignedTo });
-                            bc.close();
-                        }
+                        var bc = new BroadcastChannel('callspacestars-widget');
+                        bc.postMessage({ field: 'salesRep', value: activity.assignedTo || '' });
+                        bc.close();
                         popEl.style.display = 'none';
                     })
                     .catch(function() {

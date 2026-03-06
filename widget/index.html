@@ -293,8 +293,22 @@
             if (listenFor) {
                 var bc = new BroadcastChannel('callspacestars-widget');
                 bc.addEventListener('message', function(e) {
-                    if (e.data && e.data.field === listenFor && e.data.value) {
-                        selectByValue(e.data.value);
+                    if (e.data && e.data.field === listenFor) {
+                        if (e.data.value) {
+                            selectByValue(e.data.value);
+                        } else {
+                            // Clear selection
+                            selectedValue = '';
+                            triggerLabel.textContent = placeholder;
+                            triggerLabel.classList.add('placeholder');
+                            var items = menu.querySelectorAll('.select-item');
+                            for (var i = 0; i < items.length; i++) {
+                                items[i].classList.remove('selected');
+                                var check = items[i].querySelector('.check');
+                                if (check) check.remove();
+                            }
+                            JFCustomWidget.sendData({ valid: false, value: '' });
+                        }
                     }
                 });
             }
