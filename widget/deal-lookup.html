@@ -22,6 +22,7 @@
       clientLastName  = "Client Name"       (person last name → Full Name composite)
       location        = "Location"          (full address string → single text field)
       phone           = "Phone Number"
+      email           = "Client Email"
       date            = "Date"
       time            = "Time"
       salesRep        = "Primary Sales Rep"
@@ -241,6 +242,7 @@
                 clientLastName:   'Client Name',
                 location:         'Location',
                 phone:            'Phone Number',
+                email:            'Client Email',
                 date:             'Date',
                 time:             'Time',
                 salesRep:         'Primary Sales Rep',
@@ -410,6 +412,7 @@
                     clientLastName:   deal.personLastName,
                     location:         deal.address,
                     phone:            deal.phone,
+                    email:            deal.email,
                     // salesRep comes from activity assignedTo, not deal
                 });
 

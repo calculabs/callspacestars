@@ -73,6 +73,8 @@ export default {
           const person = d.person_id || {};
           const phones = person.phone || [];
           const rawPhone = phones.length > 0 ? phones[0].value : '';
+          const emails = person.email || [];
+          const rawEmail = emails.length > 0 ? emails[0].value : '';
           // Strip non-digits, then remove leading 1 for US country code
           let digits = rawPhone.replace(/\D/g, '');
           if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1);
@@ -102,6 +104,7 @@ export default {
             phoneNumber: digits.length >= 10 ? digits.slice(3, 10) : digits,
             personFirstName: firstName,
             personLastName: lastName,
+            email: rawEmail,
             salesRep: repId ? (repOptions[String(repId)] || '') : '',
           };
         });
