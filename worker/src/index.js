@@ -105,6 +105,8 @@ export default {
             personFirstName: firstName,
             personLastName: lastName,
             email: rawEmail,
+            msrp: d['4486cdfb4d4905a054e1906d0c5ec238ecf342d1'] || '',
+            finalPrice: d['731717ea91d88ca8d5606b1ed7cac82b389b0296'] || '',
             salesRep: repId ? (repOptions[String(repId)] || '') : '',
           };
         });
