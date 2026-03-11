@@ -267,6 +267,7 @@
             var allDeals = [];
             var selectedDeal = null;
             var highlightIndex = -1;
+            var prefillValue = data.value || '';
 
             var searchInput = document.getElementById('searchInput');
             var trigger = document.getElementById('trigger');
@@ -285,6 +286,13 @@
                     document.getElementById('loading').style.display = 'none';
                     wrapper.style.display = '';
                     JFCustomWidget.requestFrameResize({ height: 50 });
+
+                    // Auto-select if prefilled via URL param (e.g. ?PipeDriveDealLookup=4352)
+                    if (prefillValue) {
+                        var prefillId = parseInt(prefillValue, 10);
+                        var match = allDeals.find(function(d) { return d.id === prefillId; });
+                        if (match) selectDeal(match);
+                    }
                 })
                 .catch(function(err) {
                     showError('Failed to load deals: ' + err.message);
